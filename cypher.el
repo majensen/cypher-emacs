@@ -1,3 +1,14 @@
+;; cypher.el
+;; Functions to run Neo4j shell programs in Emacs
+;;
+
+;; Custom variables
+
+(defcustom cypher-prog "cypher-shell"
+  "Neo4j shell program name"
+  :type 'string
+  :group 'cypher)
+
 (defcustom cypher-host-alist '(("local"."127.0.0.1"))
   "List of cypher endpoints
 In form ( name . url-or-ip )"
@@ -11,6 +22,8 @@ In form ( name . url-or-ip )"
   :type 'alist
   :group 'cypher)
 
+;; Functions
+
 (defun cypher-get-host-interactive ()
   "Interactively choose host and protocol/port."
   (let ( (hst (completing-read "Host: " cypher-host-alist))
@@ -22,15 +35,15 @@ In form ( name . url-or-ip )"
      (alist-get 'proto (cdr (assoc prt cypher-proto-alist)))
      (alist-get 'port (cdr (assoc prt cypher-proto-alist))))))
 
+;; Interactive Functions
+
 (defun cypher-shell (arg host protocol port)
   "Create a new cypher-shell window."
   (interactive (cypher-get-host-interactive))
-  (let (
-	(proto (concat protocol "://"))
-	(cypher_bufname "cypher-remote")
-	(cypher_prog "cypher-shell"))
+  (let ((proto (concat protocol "://"))
+	(cypher_bufname (concat "*cypher : " host)))
     (switch-to-buffer
-     (make-comint cypher_bufname cypher_prog "/dev/null" "-a"
+     (make-comint cypher_bufname cypher-prog "/dev/null" "-a"
 		  (concat proto host ":" port) ))
     ))
   
