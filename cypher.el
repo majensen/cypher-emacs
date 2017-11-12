@@ -7,41 +7,60 @@
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
   :type 'string
-  :group 'cypher)
+  :group 'Cypher)
 
-(defcustom cypher-host-alist '(("local"."127.0.0.1"))
-  "List of cypher endpoints
-In form ( name . url-or-ip )"
+(defcustom cypher-host-alist
+  '((local
+     :address "127.0.0.1"
+     :url "localhost")
+    )
+  "List of cypher endpoints."
   :type 'alist
-  :group 'cypher)
+  :group 'Cypher)
 
-(defcustom cypher-proto-alist '(("bolt".((proto . "bolt") (port . "7687")))
-				("http".((proto . "http") (port . "7474")))
-				("https".((proto . "https") (port . "7473"))))
+(defcustom cypher-proto-alist
+  '((bolt
+     :proto "bolt"
+     :port "7687")
+    (http
+     :proto "http"
+     :port "7474")
+    (https
+     :proto "https"
+     :port "7473"))
   "Comm protocols and their ports"
   :type 'alist
-  :group 'cypher)
+  :group 'Cypher)
 
 ;; Functions
 
 (defun cypher-get-host-interactive ()
   "Interactively choose host and protocol/port."
-  (let ( (hst (completing-read "Host: " cypher-host-alist))
-	 (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
+  (let* ( (hst (completing-read "Host: " cypher-host-alist))
+	  (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
+	  (h (assoc (intern hst) cypher-host-alist))
+	  (p (assoc (intern prt) cypher-proto-alist))
 	 )
     (list
      current-prefix-arg
-     (cdr (assoc hst cypher-host-alist))
-     (alist-get 'proto (cdr (assoc prt cypher-proto-alist)))
-     (alist-get 'port (cdr (assoc prt cypher-proto-alist))))))
+     (or (plist-get (cdr h) :url)
+	 (plist-get (cdr h) :address))
+     (plist-get (cdr p) :proto)
+     (plist-get (cdr p) :port)
+    ))
 
 ;; Interactive Functions
 
 (defun cypher-shell (arg host protocol port)
-  "Create a new cypher-shell window."
+  "Create a new cypher-shell window.
+host: url or ip
+protocol: bolt/http/https
+port: appropriate port
+Note: cypher-shell will use cypher-get-host-interactive to more conveniently get these from custom vars.
+"
   (interactive (cypher-get-host-interactive))
   (let ((proto (concat protocol "://"))
-	(cypher_bufname (concat "*cypher : " host)))
+	(cypher_bufname (concat "cypher : " host )))
     (switch-to-buffer
      (make-comint cypher_bufname cypher-prog "/dev/null" "-a"
 		  (concat proto host ":" port) ))
