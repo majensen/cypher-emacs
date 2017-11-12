@@ -87,31 +87,60 @@ Based on `comint-mode-map'.")
 
 (defvar cypher-mode-syntax-table
   (let ((table (make-syntax-table)))
-    ;; C-style comments /**/ (see elisp manual "Syntax Flags"))
-    (modify-syntax-entry ?/ ". 14" table)
-    (modify-syntax-entry ?* ". 23" table)
-    ;; double-dash starts comments
-    (modify-syntax-entry ?- ". 12b" table)
-    ;; newline and formfeed end comments
-    (modify-syntax-entry ?\n "> b" table)
-    (modify-syntax-entry ?\f "> b" table)
     ;; single quotes (') delimit strings
     (modify-syntax-entry ?' "\"" table)
-    ;; double quotes (") don't delimit strings
-    (modify-syntax-entry ?\" "." table)
+    ;; double quotes (") delimit strings
+    (modify-syntax-entry ?\" "\"" table)
+    ;; colon is a prefix
+    (modify-syntax-entry ?: "'" table)
     ;; Make these all punctuation
     (mapc #'(lambda (c) (modify-syntax-entry c "." table))
-          (string-to-list "!#$%&+,.:;<=>?@\\|"))
+          (string-to-list "!#$%&+,.;<=>?@\\|"))
     table)
   "Syntax table used in `cypher-mode' and `cypher-interactive-mode'.")
 
 
-(defvar cypher-mode-reserved-font-lock-keywords)
-(setq cypher-mode-reserved-font-lock-keywords nil)
-(defvar cypher-mode-function-font-lock-keywords)
-(setq cypher-mode-function-font-lock-keywords nil)
-(defvar cypher-mode-command-font-lock-keywords)
-(setq cypher-mode-command-font-lock-keywords nil)
+;; Font Lock
+
+(defvar cypher-mode-reserved-font-lock-keywords nil
+  "Reserved words in Cypher.")
+(defvar cypher-mode-function-font-lock-keywords nil
+  "Built-in Cypher functions.")
+(defvar cypher-mode-command-font-lock-keywords nil
+  "Cypher-shell commands.")
+(defvar cypher-mode-font-lock-keywords nil
+  "All Cypher keywords.")
+
+(defun cypher-font-lock (keywords-only)
+  "Configure font-lock.
+
+The KEYWORDS-ONLY flag is passed to font-lock to specify whether
+only keywords should be highlighted and syntactic highlighting
+skipped."
+
+    ;; Setup font-lock.  Force re-parsing of `font-lock-defaults'.
+    (kill-local-variable 'font-lock-set-defaults)
+    (set (make-local-variable 'font-lock-defaults)
+         (list 'cypher-mode-font-lock-keywords
+               keywords-only t nil))
+
+    ;; Force font lock to reinitialize if it is already on
+    ;; Otherwise, we can wait until it can be started.
+    (when (and (fboundp 'font-lock-mode)
+	       (boundp 'font-lock-mode)
+	       font-lock-mode)
+      (font-lock-mode-internal nil)
+      (font-lock-mode-internal t))
+
+    (add-hook 'font-lock-mode-hook
+	      #'(lambda ()
+                  ;; Provide defaults for new font-lock faces.
+                  (defvar font-lock-builtin-face
+                    (if (boundp 'font-lock-preprocessor-face)
+                        font-lock-preprocessor-face
+                      font-lock-keyword-face))
+                  (defvar font-lock-doc-face font-lock-string-face))
+	      nil t))
 
 (defun cypher-font-lock-keywords-builder (face boundaries &rest keywords)
   "Generation of regexp matching any one of KEYWORDS."
@@ -166,10 +195,16 @@ Based on `comint-mode-map'.")
  ;;; command list
 	":begin" ":commit" ":exit" ":help" ":history" ":param" ":params" ":rollback")))
 
+(setq cypher-mode-font-lock-keywords
+      (flatten (list
+		cypher-mode-reserved-font-lock-keywords
+		cypher-mode-function-font-lock-keywords
+		cypher-mode-command-font-lock-keywords)))
+      
 
-
-(defun cypher-interactive-mode ()
+(defun cypher-interactive-mode (arg)
   "Major mode for Neo4j cypher-shell CLI."
+  (interactive "P")
   (setq major-mode 'cypher-interactive-mode)
   (setq mode-name "Cypher")
   (use-local-map cypher-interactive-mode-map)
@@ -188,5 +223,5 @@ Based on `comint-mode-map'.")
                     "\\|" cypher-prompt-cont-regexp "\\)")
           cypher-prompt-regexp))
   (setq left-margin cypher-prompt-length)
-  
+  (cypher-font-lock nil)
 )

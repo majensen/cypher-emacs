@@ -18,6 +18,13 @@
   :type 'alist
   :group 'Cypher)
 
+(defcustom neo4j-home "/usr/local/share/neo4j"
+  "Neo4j home directory.
+Will be used to set env $NEO4J_HOME"
+  :type 'string
+  :group 'Cypher)
+  
+
 (defcustom cypher-proto-alist
   '((bolt
      :proto "bolt"
@@ -43,11 +50,11 @@
 	 )
     (list
      current-prefix-arg
-     (or (plist-get (cdr h) :url)
-	 (plist-get (cdr h) :address))
+     (or (plist-get (cdr h) :address)
+	 (plist-get (cdr h) :url))
      (plist-get (cdr p) :proto)
      (plist-get (cdr p) :port)
-    ))
+    )))
 
 ;; Interactive Functions
 
@@ -59,10 +66,13 @@ port: appropriate port
 Note: cypher-shell will use cypher-get-host-interactive to more conveniently get these from custom vars.
 "
   (interactive (cypher-get-host-interactive))
+  (if (not (getenv "NEO4J_HOME"))
+      (setenv "NEO4J_HOME" neo4j-home))
   (let ((proto (concat protocol "://"))
 	(cypher_bufname (concat "cypher : " host )))
     (switch-to-buffer
      (make-comint cypher_bufname cypher-prog "/dev/null" "-a"
 		  (concat proto host ":" port) ))
+    (cypher-interactive-mode nil)
     ))
   
