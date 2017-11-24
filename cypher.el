@@ -69,7 +69,7 @@ Note: cypher-shell will use cypher-get-host-interactive to more conveniently get
   (if (not (getenv "NEO4J_HOME"))
       (setenv "NEO4J_HOME" neo4j-home))
   (cypher-comint protocol host port)
-  (cypher-interactive-mode nil))
+  (cypher-interactive-mode))
 
 (defun cypher-buffer-live-p (buffer)
   "Return non-nil if the process associated with buffer is live.
@@ -84,7 +84,7 @@ BUFFER can be a buffer object or buffer name."
 	   (derived-mode-p 'cypher-interactive-mode))
 	 )))
 	  
-(defun cypher-comint proto host port
+(defun cypher-comint (proto host port)
     "Set up comint buffer for cypher-shell.
 
 PROTO protocol (http https bolt)
@@ -98,9 +98,9 @@ PORT Cypher shell port"
       (let ((i 1))
 	(while (cypher-buffer-live-p
 		(format "*%s*"
-			(setq buf-name (format "Cypher-%d" i)))
-		(setq i (1+ i))))))
-    (set-buffer
+			(setq buf-name (format "Cypher-%d" i))))
+		(setq i (1+ i)))))
+    (pop-to-buffer
      (make-comint buf-name pgm "/dev/null" "-a"
 		  (concat (format "%s://" proto) host ":" port) ))))
      

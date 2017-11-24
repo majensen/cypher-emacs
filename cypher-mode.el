@@ -229,9 +229,9 @@ Based on `comint-mode-map'.")
   (setq abbrev-all-caps 1)
   (set-process-sentinel (get-buffer-process (current-buffer)) 'cypher-stop)
   ;; buffer local variables here
-  (make-local-variable 'cypher-prompt-regexp cypher-prompt-regexp)
-  (make-local-variable 'cypher-prompt-length cypher-prompt-length)
-  (make-local-variable 'cypher-preoutput-hold)  
+  (set (make-local-variable 'cypher-prompt-regexp) cypher-prompt-regexp)
+  (set (make-local-variable 'cypher-prompt-length) cypher-prompt-length)
+  (make-local-variable 'cypher-preoutput-hold)
   ;; run hooks
   (run-mode-hooks 'cypher-interactive-mode-hooks)
   ;; set comint
