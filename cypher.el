@@ -2,6 +2,14 @@
 ;; Functions to run Neo4j shell programs in Emacs
 ;;
 
+;; TODO: cypher-remove-stupid-cruft
+;; TODO: real help functions
+
+
+(defvar cypher-mode-dir "/Users/jensenma/Sandbox/cypher-emacs"
+  "Where are cypher mode .el files?")
+
+(load (concat cypher-mode-dir "/" "cypher-mode.el"))
 ;; Custom variables
 
 (defcustom cypher-prog "cypher-shell"
@@ -103,7 +111,13 @@ PORT Cypher shell port"
     (pop-to-buffer
      (make-comint buf-name pgm "/dev/null" "-a"
 		  (concat (format "%s://" proto) host ":" port) ))))
-     
+
+
+(defun cypher-remove-stupid-cruft (input)
+  "Remove the stupid ASCII table borders from cypher-shell output."
+  )
+
+
     
 	
      
