@@ -12,6 +12,17 @@
 (load (concat cypher-mode-dir "/" "cypher-mode.el"))
 ;; Custom variables
 
+(defvar cypher-remove-cruft t
+  "Remove stupid ASCII table borders and other cruft from output.")
+
+(defvar cypher-field-sep "\t"
+  "Field separator for cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
+
+(defvar cypher-field-remove-quotes t
+  "If t, remove double quotes surrounding field values in cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
+
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
   :type 'string
@@ -64,8 +75,28 @@ Will be used to set env $NEO4J_HOME"
      (plist-get (cdr p) :port)
     )))
 
-;; Interactive Functions
+(defun cypher-shell-output-remove-internal-cruft (string)
+  "Remove cruft from single cypher-shell output lines."
+  (let ( (instr string) )
+    (setq instr (mapconcat
+		 (function (lambda (x) x))
+		 (split-string instr "\\s-+|\\s-+" t (if cypher-field-remove-quotes "\""))
+		 cypher-field-sep))
+    instr)
+  )
 
+(defun cypher-shell-output-filter (proc string)
+  "Filter cypher-shell output for buffer display."
+  ;;  (setq string (replace-regexp-in-string "\\+-*\\+$" "" string))
+  (if cypher-remove-cruft
+      (setq string (mapconcat 
+		    'cypher-shell-output-remove-internal-cruft
+		    (split-string string "\\+?--+\\+?$" t "[\n\r]") "\n"))
+    )
+  (comint-output-filter proc string)
+  )
+
+;; Interactive Functions
 (defun cypher-shell (arg host protocol port)
   "Create a new cypher-shell window.
 host: url or ip
@@ -99,7 +130,8 @@ PROTO protocol (http https bolt)
 HOST url or ip
 PORT Cypher shell port"
     (let (( pgm (executable-find cypher-prog))
-	  ( buf-name "Cypher"))
+	  ( buf-name "Cypher")
+	  ( the-proc nil ))
     (unless pgm
       (error "Can't find shell program %s" cypher-prog))
     (when (cypher-buffer-live-p (format "*%s*" buf-name))
@@ -107,17 +139,10 @@ PORT Cypher shell port"
 	(while (cypher-buffer-live-p
 		(format "*%s*"
 			(setq buf-name (format "Cypher-%d" i))))
-		(setq i (1+ i)))))
-    (pop-to-buffer
-     (make-comint buf-name pgm "/dev/null" "-a"
-		  (concat (format "%s://" proto) host ":" port) ))))
-
-
-(defun cypher-remove-stupid-cruft (input)
-  "Remove the stupid ASCII table borders from cypher-shell output."
-  )
-
-
-    
-	
-     
+		(setq i (1+ i))))) 
+    (setq the-proc (get-buffer-process 
+			 (pop-to-buffer
+			  (make-comint buf-name pgm "/dev/null" "-a"
+				       (concat (format "%s://" proto) host ":" port) ))))
+    (set-process-filter the-proc 'cypher-shell-output-filter)
+    ))
