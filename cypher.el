@@ -6,11 +6,22 @@
 ;; TODO: real help functions
 
 
-(defvar cypher-mode-dir "/Users/jensenma/Sandbox/cypher-emacs"
+(defvar cypher-mode-dir "/home/maj/Code/cypher-emacs"
   "Where are cypher mode .el files?")
 
 (load (concat cypher-mode-dir "/" "cypher-mode.el"))
 ;; Custom variables
+
+(defvar cypher-remove-cruft t
+  "Remove stupid ASCII table borders and other cruft from output.")
+
+(defvar cypher-field-sep "\t"
+  "Field separator for cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
+
+(defvar cypher-field-remove-quotes t
+  "If t, remove double quotes surrounding field values in cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
 
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
@@ -64,8 +75,61 @@ Will be used to set env $NEO4J_HOME"
      (plist-get (cdr p) :port)
     )))
 
-;; Interactive Functions
+(defvar cypher-output-bufstr ""
+  "Cypher shell output buffer string.")
 
+(defun cypher-shell-output-remove-internal-cruft (string)
+  "Remove cruft from single cypher-shell output lines."
+  (let ( (instr string) )
+    (setq instr (replace-regexp-in-string
+		 "\\s-+|$" ""
+		 (replace-regexp-in-string "^|\\s-+" "" instr)))
+    (setq instr (mapconcat
+		 (function (lambda (x) x))
+		 (split-string instr "\\s-+|\\s-+" t (if cypher-field-remove-quotes "\""))
+		 cypher-field-sep))
+    instr)
+  )
+
+(defun util-shift (l)
+  "Shift a list.
+Removes and returns the last elt of l."
+  (if (not (listp l))
+      (error "Arg must be a list"))
+  (let* ( (r (nreverse l))
+	  (ret (pop r)) )
+    (setq l (nreverse r))
+    ret))
+	  
+
+(defun cypher-shell-output-filter (proc string)
+  "Filter cypher-shell output for buffer display."
+  ;;  (setq string (replace-regexp-in-string "\\+-*\\+$" "" string))
+  (setq cypher-output-bufstr (concat cypher-output-bufstr string))
+  (if (not (string-match "[\n\r]$" cypher-output-bufstr))
+      (let (
+	    (lines (split-string cypher-output-bufstr "[\n\r]"))
+	    )
+	(setq cypher-output-bufstr (util-shift lines))
+	(setq string (concat
+		      (mapconcat (function (lambda (x) x))
+				 lines "\n") "\n")))
+    (setq cypher-output-bufstr ""))
+  (if cypher-remove-cruft
+      (let (
+	    (lines (split-string string "^\\+--+\\+$" t))
+	    )
+	(setq string (mapconcat 
+		      'cypher-shell-output-remove-internal-cruft
+		      (apply 'nconc
+			     (mapcar
+			      (function (lambda (x) (split-string x "[\n\r]" t)))
+			      lines))
+		      "\n"))))
+  (comint-output-filter proc string)
+  )
+
+;; Interactive Functions
 (defun cypher-shell (arg host protocol port)
   "Create a new cypher-shell window.
 host: url or ip
@@ -99,7 +163,8 @@ PROTO protocol (http https bolt)
 HOST url or ip
 PORT Cypher shell port"
     (let (( pgm (executable-find cypher-prog))
-	  ( buf-name "Cypher"))
+	  ( buf-name "Cypher")
+	  ( the-proc nil ))
     (unless pgm
       (error "Can't find shell program %s" cypher-prog))
     (when (cypher-buffer-live-p (format "*%s*" buf-name))
@@ -107,17 +172,10 @@ PORT Cypher shell port"
 	(while (cypher-buffer-live-p
 		(format "*%s*"
 			(setq buf-name (format "Cypher-%d" i))))
-		(setq i (1+ i)))))
-    (pop-to-buffer
-     (make-comint buf-name pgm "/dev/null" "-a"
-		  (concat (format "%s://" proto) host ":" port) ))))
-
-
-(defun cypher-remove-stupid-cruft (input)
-  "Remove the stupid ASCII table borders from cypher-shell output."
-  )
-
-
-    
-	
-     
+		(setq i (1+ i))))) 
+    (setq the-proc (get-buffer-process 
+			 (pop-to-buffer
+			  (make-comint buf-name pgm "/dev/null" "-a"
+				       (concat (format "%s://" proto) host ":" port) ))))
+    (set-process-filter the-proc 'cypher-shell-output-filter)
+    ))
