@@ -15,6 +15,7 @@
 (makunbound 'cypher-fn)
 (makunbound 'cypher-cmd)
 (makunbound 'cypher-font-lock-keywords)
+(makunbound 'cypher-prompt-regexp)
 
 (defvar cypher-buffer nil
   "Current cypher-shell buffer.")
@@ -121,7 +122,9 @@ skipped."
 
 ;; Var
 
-(defvar cypher-prompt-regexp "^\\(neo4j> \\)"
+;; note that preoutput, there are terminal escape codes coming from
+;; cypher-shell that can screw up regexps in cypher-shell-output-filter
+(defvar cypher-prompt-regexp "\\(neo4j> \\)"
   "Prompt used to initialize `comint-prompt-regexp'.
 
 You can change `cypher-prompt-regexp' on `cypher-interactive-mode-hook'.")
@@ -156,7 +159,7 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
 	  (set-keymap-parents map (list comint-mode-map)))); XEmacs
     (if (fboundp 'set-keymap-name)
 	(set-keymap-name map 'cypher-interactive-mode-map)); XEmacs
-    ;; (define-key map (kbd "C-j") 'sql-accumulate-and-indent)
+    ;; (define-key map (kbd "C-j") 'cypher-accumulate-or-send)
     ;; (define-key map (kbd "C-c C-w") 'sql-copy-column)
     ;; (define-key map (kbd "O") 'sql-magic-go)
     ;; (define-key map (kbd "o") 'sql-magic-go)

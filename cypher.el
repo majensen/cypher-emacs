@@ -5,6 +5,8 @@
 ;; TODO: cypher-remove-stupid-cruft
 ;; TODO: real help functions
 
+(require 'thingatpt)
+(require 'comint)
 
 (defvar cypher-mode-dir "/home/maj/Code/cypher-emacs"
   "Where are cypher mode .el files?")
@@ -14,6 +16,9 @@
 
 (defvar cypher-remove-cruft t
   "Remove stupid ASCII table borders and other cruft from output.")
+
+(defvar cypher-statement-terminator ";"
+  "Character that terminates cypher statements (semicolon)")
 
 (defvar cypher-field-sep "\t"
   "Field separator for cypher-shell tabular output.
@@ -102,22 +107,27 @@ Removes and returns the last elt of l."
     ret))
 	  
 
-(defun cypher-shell-output-filter (proc string)
-  "Filter cypher-shell output for buffer display."
-  ;;  (setq string (replace-regexp-in-string "\\+-*\\+$" "" string))
+(defun cypher-shell-output-filter (string)
+  "Filter cypher-shell output for buffer display.
+Note that the string will come in to this function having terminal escape sequences. Regexp beware."
+  
   (setq cypher-output-bufstr (concat cypher-output-bufstr string))
-  (if (not (string-match "[\n\r]$" cypher-output-bufstr))
-      (let (
-	    (lines (split-string cypher-output-bufstr "[\n\r]"))
-	    )
-	(setq cypher-output-bufstr (util-shift lines))
-	(setq string (concat
-		      (mapconcat (function (lambda (x) x))
-				 lines "\n") "\n")))
-    (setq cypher-output-bufstr ""))
+  (if (string-match cypher-prompt-regexp cypher-output-bufstr)
+      (progn
+	(setq string cypher-output-bufstr)
+	(setq cypher-output-bufstr ""))
+    (if (not (string-match "[\n\r]$" cypher-output-bufstr))
+	(let (
+	      (lines (split-string cypher-output-bufstr "[\n\r]"))
+	      )
+	  (setq cypher-output-bufstr (util-shift lines))
+	  (setq string (concat
+			(mapconcat (function (lambda (x) x))
+				   lines "\n") "\n")))
+      (setq cypher-output-bufstr "")))
   (if cypher-remove-cruft
       (let (
-	    (lines (split-string string "^\\+--+\\+$" t))
+	    (lines (split-string string "^\\s-*\\+--+\\+\\s-*$" t))
 	    )
 	(setq string (mapconcat 
 		      'cypher-shell-output-remove-internal-cruft
@@ -126,7 +136,7 @@ Removes and returns the last elt of l."
 			      (function (lambda (x) (split-string x "[\n\r]" t)))
 			      lines))
 		      "\n"))))
-  (comint-output-filter proc string)
+  string
   )
 
 ;; Interactive Functions
@@ -155,7 +165,17 @@ BUFFER can be a buffer object or buffer name."
 	 (with-current-buffer buffer
 	   (derived-mode-p 'cypher-interactive-mode))
 	 )))
-	  
+
+(defun cypher-accumulate-or-send ()
+  (interactive)
+  ;; accumulate if no statement terminator
+  (let ( (line (thing-at-point line)) )
+    (if (or (string-regexp (concat cypher-statement-terminator "\\s-*$") line)
+	    (string-regexp cypher-prompt-regexp line))
+	(comint-send-input)
+      (comint-accumulate)))
+  )
+
 (defun cypher-comint (proto host port)
     "Set up comint buffer for cypher-shell.
 
@@ -173,9 +193,9 @@ PORT Cypher shell port"
 		(format "*%s*"
 			(setq buf-name (format "Cypher-%d" i))))
 		(setq i (1+ i))))) 
-    (setq the-proc (get-buffer-process 
-			 (pop-to-buffer
-			  (make-comint buf-name pgm "/dev/null" "-a"
-				       (concat (format "%s://" proto) host ":" port) ))))
-    (set-process-filter the-proc 'cypher-shell-output-filter)
+    (pop-to-buffer
+     (make-comint buf-name pgm "/dev/null" "-a"
+		  (concat (format "%s://" proto) host ":" port) ))
+    (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
+    (setq comint-process-echoes t)
     ))
