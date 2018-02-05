@@ -6,7 +6,7 @@
 ;; TODO: real help functions
 
 
-(defvar cypher-mode-dir "/Users/jensenma/Sandbox/cypher-emacs"
+(defvar cypher-mode-dir "/home/maj/Code/cypher-emacs"
   "Where are cypher mode .el files?")
 
 (load (concat cypher-mode-dir "/" "cypher-mode.el"))
@@ -75,9 +75,15 @@ Will be used to set env $NEO4J_HOME"
      (plist-get (cdr p) :port)
     )))
 
+(defvar cypher-output-bufstr ""
+  "Cypher shell output buffer string.")
+
 (defun cypher-shell-output-remove-internal-cruft (string)
   "Remove cruft from single cypher-shell output lines."
   (let ( (instr string) )
+    (setq instr (replace-regexp-in-string
+		 "\\s-+|$" ""
+		 (replace-regexp-in-string "^|\\s-+" "" instr)))
     (setq instr (mapconcat
 		 (function (lambda (x) x))
 		 (split-string instr "\\s-+|\\s-+" t (if cypher-field-remove-quotes "\""))
@@ -85,14 +91,41 @@ Will be used to set env $NEO4J_HOME"
     instr)
   )
 
+(defun util-shift (l)
+  "Shift a list.
+Removes and returns the last elt of l."
+  (if (not (listp l))
+      (error "Arg must be a list"))
+  (let* ( (r (nreverse l))
+	  (ret (pop r)) )
+    (setq l (nreverse r))
+    ret))
+	  
+
 (defun cypher-shell-output-filter (proc string)
   "Filter cypher-shell output for buffer display."
   ;;  (setq string (replace-regexp-in-string "\\+-*\\+$" "" string))
+  (setq cypher-output-bufstr (concat cypher-output-bufstr string))
+  (if (not (string-match "[\n\r]$" cypher-output-bufstr))
+      (let (
+	    (lines (split-string cypher-output-bufstr "[\n\r]"))
+	    )
+	(setq cypher-output-bufstr (util-shift lines))
+	(setq string (concat
+		      (mapconcat (function (lambda (x) x))
+				 lines "\n") "\n")))
+    (setq cypher-output-bufstr ""))
   (if cypher-remove-cruft
-      (setq string (mapconcat 
-		    'cypher-shell-output-remove-internal-cruft
-		    (split-string string "\\+?--+\\+?$" t "[\n\r]") "\n"))
-    )
+      (let (
+	    (lines (split-string string "^\\+--+\\+$" t))
+	    )
+	(setq string (mapconcat 
+		      'cypher-shell-output-remove-internal-cruft
+		      (apply 'nconc
+			     (mapcar
+			      (function (lambda (x) (split-string x "[\n\r]" t)))
+			      lines))
+		      "\n"))))
   (comint-output-filter proc string)
   )
 
