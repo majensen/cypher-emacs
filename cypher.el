@@ -84,7 +84,8 @@ Will be used to set env $NEO4J_HOME"
   "Cypher shell output buffer string.")
 
 (defun cypher-shell-output-remove-internal-cruft (string)
-  "Remove cruft from single cypher-shell output lines."
+  "Remove cruft from single cypher-shell output lines.
+STRING should have newline stripped."
   (let ( (instr string) )
     (setq instr (replace-regexp-in-string
 		 "\\s-+|$" ""
@@ -109,35 +110,35 @@ Removes and returns the last elt of l."
 
 (defun cypher-shell-output-filter (string)
   "Filter cypher-shell output for buffer display.
-Note that the string will come in to this function having terminal escape sequences. Regexp beware."
+Note that STRING will come in to this function having terminal escape sequences. Regexp beware."
   
   (setq cypher-output-bufstr (concat cypher-output-bufstr string))
-  (if (string-match cypher-prompt-regexp cypher-output-bufstr)
-      (progn
-	(setq string cypher-output-bufstr)
-	(setq cypher-output-bufstr ""))
-    (if (not (string-match "[\n\r]$" cypher-output-bufstr))
-	(let (
-	      (lines (split-string cypher-output-bufstr "[\n\r]"))
-	      )
-	  (setq cypher-output-bufstr (util-shift lines))
-	  (setq string (concat
-			(mapconcat (function (lambda (x) x))
-				   lines "\n") "\n")))
-      (setq cypher-output-bufstr "")))
-  (if cypher-remove-cruft
-      (let (
-	    (lines (split-string string "^\\s-*\\+--+\\+\\s-*$" t))
-	    )
-	(setq string (mapconcat 
-		      'cypher-shell-output-remove-internal-cruft
-		      (apply 'nconc
-			     (mapcar
-			      (function (lambda (x) (split-string x "[\n\r]" t)))
-			      lines))
-		      "\n"))))
-  string
-  )
+  (let (
+	(lines (split-string cypher-output-bufstr "[\n\r]"))
+	(closed (string-match "[\n\r]$" cypher-output-bufstr)) ; ends with a CR
+	(stracc "")
+	line
+	)
+    (while (setq line (car lines))
+      (if (> (length lines) 1)
+	  (if cypher-remove-cruft
+	      (if (string-match "\\+-+\\+" line)
+		  nil
+		(setq stracc (concat stracc
+				     (cypher-shell-output-remove-internal-cruft line)
+				     "\n"))
+		)
+	    (setq stracc (concat stracc line)))
+	(if (string-match cypher-prompt-regexp line)
+	    (progn
+	      (setq stracc (concat stracc line))
+	      (setq cypher-output-bufstr ""))
+	  (if (not closed)
+	      (setq cypher-output-bufstr line)
+	    (setq cypher-output-bufstr ""))))
+      (setq lines (cdr lines)))
+    stracc))
+
 
 ;; Interactive Functions
 (defun cypher-shell (arg host protocol port)
