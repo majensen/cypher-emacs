@@ -28,6 +28,9 @@ Only meaningful if `cypher-remove-cruft' is set.")
   "If t, remove double quotes surrounding field values in cypher-shell tabular output.
 Only meaningful if `cypher-remove-cruft' is set.")
 
+(defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
+  "Regexp to identify cypher-shell return status line.")
+
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
   :type 'string
@@ -124,11 +127,14 @@ Note that STRING will come in to this function having terminal escape sequences.
 	  (if cypher-remove-cruft
 	      (if (string-match "\\+-+\\+" line)
 		  nil
-		(setq stracc (concat stracc
-				     (cypher-shell-output-remove-internal-cruft line)
-				     "\n"))
+		(if (string-match cypher-return-status-regexp line)
+		    (message line)
+		  (setq stracc (concat stracc
+				       (cypher-shell-output-remove-internal-cruft line)
+				       "\n")))
 		)
 	    (setq stracc (concat stracc line)))
+	;; last line...
 	(if (string-match cypher-prompt-regexp line)
 	    (progn
 	      (setq stracc (concat stracc line))

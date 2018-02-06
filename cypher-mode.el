@@ -159,7 +159,7 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
 	  (set-keymap-parents map (list comint-mode-map)))); XEmacs
     (if (fboundp 'set-keymap-name)
 	(set-keymap-name map 'cypher-interactive-mode-map)); XEmacs
-    ;; (define-key map (kbd "C-j") 'cypher-accumulate-or-send)
+    (define-key map (kbd "C-j") 'cypher-accumulate-or-send)
     ;; (define-key map (kbd "C-c C-w") 'sql-copy-column)
     ;; (define-key map (kbd "O") 'sql-magic-go)
     ;; (define-key map (kbd "o") 'sql-magic-go)
