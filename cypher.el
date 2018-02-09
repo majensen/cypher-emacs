@@ -190,8 +190,7 @@ PROTO protocol (http https bolt)
 HOST url or ip
 PORT Cypher shell port"
     (let (( pgm (executable-find cypher-prog))
-	  ( buf-name "Cypher")
-	  ( the-proc nil ))
+	  ( buf-name "Cypher"))
     (unless pgm
       (error "Can't find shell program %s" cypher-prog))
     (when (cypher-buffer-live-p (format "*%s*" buf-name))
@@ -204,5 +203,6 @@ PORT Cypher shell port"
      (make-comint buf-name pgm "/dev/null" "-a"
 		  (concat (format "%s://" proto) host ":" port) ))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
+    (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
     (setq comint-process-echoes t)
-    ))
+     ))

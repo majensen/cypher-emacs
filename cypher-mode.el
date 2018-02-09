@@ -9,6 +9,7 @@
 
 ;; shamelessly ripped off from sql-mode
 
+(require 'thingatpt)
 
 ;; for resetting
 (makunbound 'cypher-kw)
@@ -85,6 +86,7 @@
 
       )))
 
+
 ;; Font Lock
 
 (defun cypher-font-lock (keywords-only)
@@ -119,6 +121,14 @@ skipped."
 	      nil t))
 
 
+;; Completion
+(defun cypher-completion-at-point ()
+  "Function to provide cypher keyword completion.
+Added to `comint-dynamic-complete-functions' hook"
+  ;;          (START END COLLECTION . PROPS)
+  (let ((bounds (bounds-of-thing-at-point 'word))) 
+    (list (car bounds) (cdr bounds)  cypher-kw . nil ))
+)
 
 ;; Var
 
@@ -159,7 +169,8 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
 	  (set-keymap-parents map (list comint-mode-map)))); XEmacs
     (if (fboundp 'set-keymap-name)
 	(set-keymap-name map 'cypher-interactive-mode-map)); XEmacs
-    (define-key map (kbd "C-j") 'cypher-accumulate-or-send)
+    (define-key map (kbd "RET") 'cypher-accumulate-or-send)
+    (define-key map (kbd "TAB") 'completion-at-point)
     ;; (define-key map (kbd "C-c C-w") 'sql-copy-column)
     ;; (define-key map (kbd "O") 'sql-magic-go)
     ;; (define-key map (kbd "o") 'sql-magic-go)
@@ -221,7 +232,8 @@ Based on `comint-mode-map'.")
 (put 'cypher-interactive-mode 'custom-mode-group 'Cypher)
 (defun cypher-interactive-mode ()
   "Major mode to use cypher-shell interactively."
-  (delay-mode-hooks (comint-mode))
+  ;;  (delay-mode-hooks (comint-mode))
+  (comint-mode)
   (setq major-mode 'cypher-interactive-mode)
   (setq mode-name "iCypher")
   (use-local-map cypher-interactive-mode-map)
@@ -234,7 +246,7 @@ Based on `comint-mode-map'.")
   ;; buffer local variables here
   (set (make-local-variable 'cypher-prompt-regexp) cypher-prompt-regexp)
   (set (make-local-variable 'cypher-prompt-length) cypher-prompt-length)
-  (make-local-variable 'cypher-preoutput-hold)
+  (make-local-variable 'cypher-output-bufstr)
   ;; run hooks
   (run-mode-hooks 'cypher-interactive-mode-hooks)
   ;; set comint
