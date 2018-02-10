@@ -49,8 +49,24 @@
   "Cypher built-in functions")
 
 (defvar cypher-cmd
-  '("begin" "commit" "exit" "help" "history" "param" "params" "rollback")
+  '(":begin" ":commit" ":exit" ":help" ":history" ":param" ":params" ":rollback" ":quit")
   "Cypher-shell commands")
+
+(defvar cypher-kw-re (regexp-opt cypher-kw)
+  "Cypher keyword regexp."
+  )
+
+(defvar cypher-fn-re (regexp-opt cypher-fn)
+  "Cypher function regexp."
+  )
+
+(defvar cypher-cmd-re (regexp-opt cypher-cmd)
+  "Cypher command regexp."
+  )
+
+(defvar cypher-var-re "\\b[0-9A-Za-z_]+\\b"
+  "Cypher variable regexp"
+  )
 
 (defface font-lock-type-bold
   '((t :inherit (bold font-lock-type-face)))
@@ -58,34 +74,27 @@
 (setq font-lock-type-bold 'font-lock-type-bold) ; this is weird that I have to do this
 
 
-(let* 
 ;; matchers
 ;; matcher for labels
 ;; matcher for relationships <-- --> -- <-[]- -[]-> -[]-
 ;; matcher for nodes (<token>)
-    ( (kw-re (regexp-opt cypher-kw))
-      (fn-re (regexp-opt cypher-fn))
-      (cmd-re (regexp-opt cypher-cmd))
-      (var-re "\\b[0-9A-Za-z_]+\\b")
-      )
-  (defconst cypher-font-lock-keywords
-    `(;; cypher commands first
-      (,(concat "\\b:" cmd-re "\\b") . font-lock-constant-face)
-      ;; then keywords
-      ,(concat "\\b" kw-re "\\b")
-      (,(concat "\\b" fn-re "\\b") . font-lock-function-name-face)
-      ;; relationship patterns
-      ( ")\\(<?-\\(:?\\[[^]]*\\]\\)?->?\\)("
-	1  font-lock-type-face)
-      ;; node patterns
-      (,(concat "\\W\\((" var-re "\\)\\([^()]*\\)\\()\\)")
-       (1  font-lock-type-bold)
-       (3 font-lock-type-bold))
-      ;; then labels
-      ( ,(concat ":" var-re) . font-lock-constant-face)
-
-      )))
-
+(defconst cypher-font-lock-keywords
+  `(;; cypher commands first
+    (,(concat "\\b" cypher-cmd-re "\\b") . font-lock-constant-face)
+    ;; then keywords
+    ,(concat "\\b" cypher-kw-re "\\b")
+    (,(concat "\\b" cypher-fn-re "\\b") . font-lock-function-name-face)
+    ;; relationship patterns
+    ( ")\\(<?-\\(:?\\[[^]]*\\]\\)?->?\\)("
+      1  font-lock-type-face)
+    ;; node patterns
+    (,(concat "\\W\\((" cypher-var-re "\\)\\([^()]*\\)\\()\\)")
+     (1  font-lock-type-bold)
+     (3 font-lock-type-bold))
+    ;; then labels
+    ( ,(concat ":" cypher-var-re) . font-lock-constant-face)
+    
+    ))
 
 ;; Font Lock
 
@@ -122,13 +131,32 @@ skipped."
 
 
 ;; Completion
+(defun cypher-get-bol ()
+  "Get position of beginning of command line."
+  (let ((bocl (save-excursion (comint-bol) (point))))
+    bocl))
+
+(defun cypher-bolp ()
+  "True if point at beginning of command line."
+    (= (cypher-get-bol) (point)))
+
 (defun cypher-completion-at-point ()
   "Function to provide cypher keyword completion.
 Added to `comint-dynamic-complete-functions' hook"
   ;;          (START END COLLECTION . PROPS)
-  (let ((bounds (bounds-of-thing-at-point 'word))) 
-    (list (car bounds) (cdr bounds)  cypher-kw . nil ))
+  (let (
+	 (bounds (bounds-of-thing-at-point 'word))
+	 context
+	 )
+    (setq context (buffer-substring (cypher-get-bol) (point)))
+    (if (not bounds)
+	(list (point) (point) cypher-kw . nil)
+      (if (or (not context)
+	      (string-match "^\\s-*:" context))
+	    (list (cypher-get-bol) (point) cypher-cmd . nil)
+	(list (car bounds) (cdr bounds)  cypher-kw . nil ))))
 )
+
 
 ;; Var
 
@@ -232,8 +260,7 @@ Based on `comint-mode-map'.")
 (put 'cypher-interactive-mode 'custom-mode-group 'Cypher)
 (defun cypher-interactive-mode ()
   "Major mode to use cypher-shell interactively."
-  ;;  (delay-mode-hooks (comint-mode))
-  (comint-mode)
+  ;;  (comint-mode)
   (setq major-mode 'cypher-interactive-mode)
   (setq mode-name "iCypher")
   (use-local-map cypher-interactive-mode-map)

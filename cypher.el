@@ -175,10 +175,12 @@ BUFFER can be a buffer object or buffer name."
 
 (defun cypher-accumulate-or-send ()
   (interactive)
-  ;; accumulate if no statement terminator
-  (let ( (line (thing-at-point line)) )
-    (if (or (string-regexp (concat cypher-statement-terminator "\\s-*$") line)
-	    (string-regexp cypher-prompt-regexp line))
+  ;; accumulate if no statement terminator (and not a cypher-shell cmd)
+  (let ( (line (thing-at-point 'line)) )
+    (if (or (not line)
+	    (string-match (concat "^\\s-*:" cypher-cmd-re "\\s-*$") line)
+	    (string-match (concat cypher-statement-terminator "\\s-*$") line)
+	    (string-match cypher-prompt-regexp line))
 	(comint-send-input)
       (comint-accumulate)))
   )
