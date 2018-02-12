@@ -2,7 +2,6 @@
 ;; Functions to run Neo4j shell programs in Emacs
 ;;
 
-;; TODO: cypher-remove-stupid-cruft
 ;; TODO: real help functions
 
 (require 'thingatpt)
@@ -31,6 +30,10 @@ Only meaningful if `cypher-remove-cruft' is set.")
 (defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
   "Regexp to identify cypher-shell return status line.")
 
+(defvar-local cypher-buffer-process nil
+  "The cypher-shell process for the buffer. Buffer-local.")
+
+  
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
   :type 'string
@@ -204,7 +207,32 @@ PORT Cypher shell port"
     (pop-to-buffer
      (make-comint buf-name pgm "/dev/null" "-a"
 		  (concat (format "%s://" proto) host ":" port) ))
+    (setq cypher-buffer-process (get-buffer-process (current-buffer)))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
     (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
     (setq comint-process-echoes t)
      ))
+
+;; cypher-do-query
+;; nice to be able to execute a query sub rosa
+;; (e.g. use 'call db.labels;' to get all db labels for use in
+;; completion)
+;; could set process-filter temporarily to capture output without its
+;; going to the buffer?
+;; 
+
+;; (defun cypher-do-query (qry)
+;;   "Execute a cypher query directly and return response.
+;; QRY is the query as string."
+;;   (let ( (org-process-filter (process-filter cypher-buffer-process))
+;; 	 (outp nil)
+;; 	 )
+;;     (set-process-filter cypher-buffer-process
+;; 			(function
+;; 			 (lambda (pr str)
+;; 			   (setq outp (cons str outp)))))
+;;     (comint-simple-send cypher-buffer-process (concat qry "\n"))
+;;     (set-process-filter cypher-buffer-process org-process-filter)
+;;     outp
+;;     ))
+
