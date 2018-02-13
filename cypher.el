@@ -117,7 +117,6 @@ Removes and returns the last elt of l."
 (defun cypher-shell-output-filter (string)
   "Filter cypher-shell output for buffer display.
 Note that STRING will come in to this function having terminal escape sequences. Regexp beware."
-  
   (setq cypher-output-bufstr (concat cypher-output-bufstr string))
   (let (
 	(lines (split-string cypher-output-bufstr "[\n\r]"))
@@ -210,6 +209,8 @@ PORT Cypher shell port"
     (setq cypher-buffer-process (get-buffer-process (current-buffer)))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
     (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
+    (setq comint-prompt-regexp cypher-prompt-regexp)
+    (setq comint-use-prompt-regexp t)
     (setq comint-process-echoes t)
      ))
 
@@ -221,16 +222,39 @@ PORT Cypher shell port"
 ;; going to the buffer?
 ;; 
 
+(defun cypher-do-query (qry)
+  "Execute a cypher query directly and return response.
+QRY is the query as string."
+  (if (not (boundp 'cypher-buffer-process))
+      (error "Not a Cypher process buffer"))
+  (if ( or (not cypher-buffer-process)
+	   (not (process-live-p cypher-buffer-process)))
+      (error "Buffer has no process"))
+  (if (not (string-match ";\\s-*[\n]$" qry))
+      (setq qry (concat qry ";\n")))
+  (save-excursion
+    (let ( resp last-prompt-pos )
+      (comint-next-prompt 1)
+      (comint-send-string cypher-buffer-process qry)
+      (sit-for 1)
+      (setq last-prompt-pos (save-excursion (comint-previous-prompt 2)
+					     (point)))
+      (setq resp (buffer-substring last-prompt-pos (point)))
+      (delete-region last-prompt-pos (point))
+      (message resp) )
+    ))
+
 ;; (defun cypher-do-query (qry)
 ;;   "Execute a cypher query directly and return response.
 ;; QRY is the query as string."
 ;;   (let ( (org-process-filter (process-filter cypher-buffer-process))
 ;; 	 (outp nil)
 ;; 	 )
-;;     (set-process-filter cypher-buffer-process
-;; 			(function
-;; 			 (lambda (pr str)
-;; 			   (setq outp (cons str outp)))))
+    ;; (set-process-filter cypher-buffer-process
+    ;; 			(function
+    ;; 			 (lambda (pr str)
+    ;; 			   (setq cypher-outp (cons str cypher-outp))
+    ;; 			   "")))
 ;;     (comint-simple-send cypher-buffer-process (concat qry "\n"))
 ;;     (set-process-filter cypher-buffer-process org-process-filter)
 ;;     outp
