@@ -160,7 +160,9 @@ Note: cypher-shell will use cypher-get-host-interactive to more conveniently get
   (if (not (getenv "NEO4J_HOME"))
       (setenv "NEO4J_HOME" neo4j-home))
   (cypher-comint protocol host port)
-  (cypher-interactive-mode))
+  (cypher-interactive-mode)
+  (setq cypher-buffer-process (get-buffer-process (current-buffer)))
+)
 
 (defun cypher-buffer-live-p (buffer)
   "Return non-nil if the process associated with buffer is live.
@@ -206,10 +208,8 @@ PORT Cypher shell port"
     (pop-to-buffer
      (make-comint buf-name pgm "/dev/null" "-a"
 		  (concat (format "%s://" proto) host ":" port) ))
-    (setq cypher-buffer-process (get-buffer-process (current-buffer)))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
     (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
-    (setq comint-prompt-regexp cypher-prompt-regexp)
     (setq comint-use-prompt-regexp t)
     (setq comint-process-echoes t)
      ))

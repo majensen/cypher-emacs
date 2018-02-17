@@ -165,7 +165,6 @@ Added to `comint-dynamic-complete-functions' hook"
 
 (defvar cypher-prompt-regexp "\\(^\\(?:\e.*?\\)*neo4j> \\(?:\e.*?\\)*\\)"
   "Prompt used to initialize `comint-prompt-regexp'.
-
 You can change `cypher-prompt-regexp' on `cypher-interactive-mode-hook'.")
 
 (defvar cypher-prompt-length 7
@@ -228,11 +227,7 @@ Based on `comint-mode-map'.")
   "Mode map used for `cypher-mode'.")
 
 ;; Abbreviations
-(define-abbrev-table 'cypher-mode-abbrev-table
-  '(("ret" "return" nil nil t)
-    ("ma" "match" nil nil t)
-    ("cr" "create" nil nil t))
-  "Abbrev table used in `cypher-mode' and `cypher-interactive-mode'.")
+
 
 ;; Syntax Table
 
@@ -256,29 +251,25 @@ Based on `comint-mode-map'.")
     table)
   "Syntax table used in `cypher-mode' and `cypher-interactive-mode'.")
 
+
 ;; Cypher interactive mode
-(put 'cypher-interactive-mode 'mode-class 'special)
+
 (put 'cypher-interactive-mode 'custom-mode-group 'Cypher)
-(defun cypher-interactive-mode ()
+
+(define-derived-mode cypher-interactive-mode comint-mode "iCypher"
   "Major mode to use cypher-shell interactively."
-  ;;  (comint-mode)
-  (setq major-mode 'cypher-interactive-mode)
-  (setq mode-name "iCypher")
-  (use-local-map cypher-interactive-mode-map)
-  (set-syntax-table cypher-mode-syntax-table)
+  :syntax-table cypher-mode-syntax-table
+  :group 'Cypher
+  :abbrev-table nil
   ;; start font lock
   (cypher-font-lock nil)
-  (setq local-abbrev-table cypher-mode-abbrev-table)
-  (setq abbrev-all-caps 1)
   (set-process-sentinel (get-buffer-process (current-buffer)) 'cypher-stop)
   ;; buffer local variables here
   (set (make-local-variable 'cypher-prompt-regexp) cypher-prompt-regexp)
   (set (make-local-variable 'cypher-prompt-length) cypher-prompt-length)
   (make-local-variable 'cypher-output-bufstr)
-  ;; run hooks
-  (run-mode-hooks 'cypher-interactive-mode-hooks)
   ;; set comint
-  (setq cominit-prompt-regexp cypher-prompt-cont-regexp)
+  (setq comint-prompt-regexp cypher-prompt-regexp)
   (setq left-margin cypher-prompt-length)
   ;; input sender?
   )
@@ -293,7 +284,7 @@ Based on `comint-mode-map'.")
 
 (defun cypher-send-string (str)
   "Send the string STR to the Cypher-shell process."
-  (interactive "sCypher text: ")
+  (interactive "sCypher statement: ")
 
   (let ((comint-input-sender-no-newline nil)
         (s (replace-regexp-in-string "[[:space:]\n\r]+\\'" "" str)))
