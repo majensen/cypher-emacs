@@ -37,10 +37,14 @@ Only meaningful if `cypher-remove-cruft' is set.")
 (defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
   "Regexp to identify cypher-shell return status line.")
 
+(defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset")
+
 (defvar-local cypher-buffer-process nil
   "The cypher-shell process for the buffer. Buffer-local.")
 
-  
+(defvar-local cypher-do-query-timeout 3
+  "Timeout in seconds for `cypher-do-query' queries.")
+
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
   :type 'string
@@ -221,49 +225,40 @@ PORT Cypher shell port"
     (setq comint-process-echoes t)
      ))
 
-;; cypher-do-query
-;; nice to be able to execute a query sub rosa
-;; (e.g. use 'call db.labels;' to get all db labels for use in
-;; completion)
-;; could set process-filter temporarily to capture output without its
-;; going to the buffer?
-;; 
-
-(defun cypher-do-query (qry)
+(defun cypher-do-query (qry &optional include-hdr)
   "Execute a cypher query directly and return response.
-QRY is the query as string."
+QRY is the query as string. The query is executed in the buffer
+and the response is extracted and cleaned up. Response returned
+as a string.
+Pass `t' for INCLUDE-HDR to retrieve the output header line 
+\(i.e., the column names\)"
   (if (not (boundp 'cypher-buffer-process))
-      (error "Not a Cypher process buffer"))
+      (user-error "Not a Cypher process buffer"))
   (if ( or (not cypher-buffer-process)
 	   (not (process-live-p cypher-buffer-process)))
-      (error "Buffer has no process"))
+      (user-error "Buffer has no process"))
   (if (not (string-match ";\\s-*[\n]$" qry))
       (setq qry (concat qry ";\n")))
-  (save-excursion
-    (let ( resp last-prompt-pos )
-      (comint-next-prompt 1)
-      (comint-send-string cypher-buffer-process qry)
-      (sit-for 1)
-      (setq last-prompt-pos (save-excursion (comint-previous-prompt 2)
-					     (point)))
-      (setq resp (buffer-substring last-prompt-pos (point)))
-      (delete-region last-prompt-pos (point))
-      (message resp) )
+  (let ( resp )
+    (save-excursion
+      (comint-goto-process-mark)
+      (let ( (cur (point)) (aft (point-marker)))
+	(set-marker-insertion-type aft t)
+	(comint-send-string cypher-buffer-process qry)
+	(accept-process-output cypher-buffer-process cypher-do-query-timeout)
+	(setq resp (buffer-substring-no-properties cur aft))
+	(delete-region cur aft)
+	(set-marker aft nil)))
+    (setq resp (split-string resp "[\n\r]"))
+    (if (not include-hdr) (setq resp (cdr resp)))
+    (setq resp (mapconcat
+		(function (lambda (x)
+			    (if (string-match comint-prompt-regexp x) ""
+			      (concat x "\n"))
+			    ))
+		resp ""))
+    (if (string-match cypher-error-status-regexp resp)
+	(user-error resp)
+      resp)
     ))
-
-;; (defun cypher-do-query (qry)
-;;   "Execute a cypher query directly and return response.
-;; QRY is the query as string."
-;;   (let ( (org-process-filter (process-filter cypher-buffer-process))
-;; 	 (outp nil)
-;; 	 )
-    ;; (set-process-filter cypher-buffer-process
-    ;; 			(function
-    ;; 			 (lambda (pr str)
-    ;; 			   (setq cypher-outp (cons str cypher-outp))
-    ;; 			   "")))
-;;     (comint-simple-send cypher-buffer-process (concat qry "\n"))
-;;     (set-process-filter cypher-buffer-process org-process-filter)
-;;     outp
-;;     ))
 
