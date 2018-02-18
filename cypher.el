@@ -6,6 +6,13 @@
 
 (require 'thingatpt)
 (require 'comint)
+(add-function :after (symbol-function 'comint-skip-prompt)
+	      (lambda ()
+		(if (and (bolp)
+			 (looking-at (concat "\n+" comint-prompt-regexp)))
+		    (goto-char (match-end 0))))
+	      '((name . fix-comint-skip-prompt))
+	      )
 
 (defvar cypher-mode-dir "/home/maj/Code/cypher-emacs"
   "Where are cypher mode .el files?")
