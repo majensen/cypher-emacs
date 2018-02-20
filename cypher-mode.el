@@ -18,6 +18,22 @@
 (makunbound 'cypher-font-lock-keywords)
 (makunbound 'cypher-prompt-regexp)
 
+;; Custom vars
+
+(defcustom cypher-pop-to-buffer-after-send-region nil
+  "When non-nil, pop to the buffer SQL statements are sent to.
+
+After a call to `cypher-send-string', `cypher-send-region',
+`cypher-send-paragraph' or `cypher-send-buffer', the window is split
+and the iCypher buffer is shown.  If this variable is not nil, that
+buffer's window will be selected by calling `pop-to-buffer'.  If
+this variable is nil, that buffer is shown using
+`display-buffer'."
+  :type 'boolean
+  :group 'Cypher)
+
+;; Var
+
 (defvar cypher-buffer nil
   "Current cypher-shell buffer.")
 
@@ -51,6 +67,9 @@
 (defvar cypher-cmd
   '(":begin" ":commit" ":exit" ":help" ":history" ":param" ":params" ":rollback" ":quit")
   "Cypher-shell commands")
+
+(defvar cypher-buffer nil
+  "Latest cypher-shell buffer.")
 
 (defvar-local cypher-db-labels nil
   "Node labels in the db. 
@@ -152,7 +171,7 @@ Added to `comint-dynamic-complete-functions' hook"
 	(bounds (bounds-of-thing-at-point 'word))
 	(context (buffer-substring (cypher-get-bol) (point)))
 	comp-list
-	 )
+	)
     ;; include a prefix colon
     (if bounds
 	(let ( (c (char-before (car bounds))) )
@@ -163,16 +182,19 @@ Added to `comint-dynamic-complete-functions' hook"
 	  (setq bounds (cons (1- (point)) (point)))
 	(setq bounds (cons (point) (point)))
 	))
-    (if (= (car bounds) (point-max))
-	(setq comp-list (list (car bounds) (cdr bounds) ()))
-      (if (= (length context) 0)
-	  (setq comp-list (list (car bounds) (cdr bounds) cypher-kw . nil))
-	(if (string-match "^\\s-*:" context)
-	    (setq comp-list (list (car bounds) (cdr bounds) cypher-cmd . nil))
-	  (if (= (char-after (car bounds)) ?:)
-	      (setq comp-list (list (car bounds) (cdr bounds) cypher-db-labels . nil))
-	    (setq comp-list (list (car bounds) (cdr bounds)  cypher-kw . nil ))
-	    ))))
+    (setq comp-list (list (car bounds) (cdr bounds) 
+			  (if (= (car bounds) (point-max))
+			      ()
+			    (if (= (length context) 0)
+				cypher-kw
+			      (if (string-match "^\\s-*:" context)
+				  cypher-cmd
+				(if (= (char-after (car bounds)) ?:)
+				    cypher-db-labels
+				  (if (and (char-after (cdr bounds))
+					   (= (char-after (cdr bounds)) ?\())
+				      cypher-fn
+				    cypher-kw ))))) . nil ))
     comp-list
     ))
 
@@ -219,12 +241,6 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
     (define-key map (kbd "RET") 'cypher-accumulate-or-send)
     (define-key map (kbd "TAB") 'completion-at-point)
     (define-key map (kbd "C-a") 'comint-bol-or-process-mark)
-    ;; (define-key map (kbd "C-c C-w") 'sql-copy-column)
-    ;; (define-key map (kbd "O") 'sql-magic-go)
-    ;; (define-key map (kbd "o") 'sql-magic-go)
-    ;; (define-key map (kbd ";") 'sql-magic-semicolon)
-    ;; (define-key map (kbd "C-c C-l a") 'sql-list-all)
-    ;; (define-key map (kbd "C-c C-l t") 'sql-list-table)
     map)
   "Mode map used for `cypher-interactive-mode'.
 Based on `comint-mode-map'.")
@@ -238,16 +254,13 @@ Based on `comint-mode-map'.")
     (define-key map (kbd "C-c C-s") 'cypher-send-string)
     (define-key map (kbd "C-c C-b") 'cypher-send-buffer)
     (define-key map (kbd "C-c C-n") 'cypher-send-line-and-next)
-    (define-key map (kbd "C-c C-i") 'cypher-product-interactive)
-    (define-key map (kbd "C-c C-l a") 'cypher-list-all)
-    (define-key map (kbd "C-c C-l t") 'cypher-list-table)
+    ;; (define-key map (kbd "C-c C-i") 'cypher-product-interactive)
     (define-key map [remap beginning-of-defun] 'cypher-beginning-of-statement)
     (define-key map [remap end-of-defun] 'cypher-end-of-statement)
     map)
   "Mode map used for `cypher-mode'.")
 
 ;; Abbreviations
-
 
 ;; Syntax Table
 
@@ -270,7 +283,6 @@ Based on `comint-mode-map'.")
           (string-to-list "!#$%&+,.;<=>?@\\|"))
     table)
   "Syntax table used in `cypher-mode' and `cypher-interactive-mode'.")
-
 
 ;; Cypher interactive mode
 
@@ -296,6 +308,8 @@ Based on `comint-mode-map'.")
 
 (defun cypher-stop (process event)
   "Called after cypher-shell is killed."
+  (if (eq cypher-buffer (current-buffer))
+      (setq cypher-buffer nil)) ;; should actually look for another buffer
   (if (not buffer-read-only)
       (insert (format "\nProcess %s %s\n" process event))
     (message "Process %s %s" process event)))
@@ -308,36 +322,27 @@ Based on `comint-mode-map'.")
 
   (let ((comint-input-sender-no-newline nil)
         (s (replace-regexp-in-string "[[:space:]\n\r]+\\'" "" str)))
-    (if (sql-buffer-live-p sql-buffer)
+    (if (cypher-buffer-live-p cypher-buffer)
 	(progn
-	  ;; Ignore the hoping around...
 	  (save-excursion
-	    ;; Set product context
-	    (with-current-buffer sql-buffer
+	    (with-current-buffer cypher-buffer
 	      ;; Send the string (trim the trailing whitespace)
-	      (sql-input-sender (get-buffer-process sql-buffer) s)
-
-	      ;; Send a command terminator if we must
-	      (if sql-send-terminator
-		  (sql-send-magic-terminator sql-buffer s sql-send-terminator))
-
+	      (comint-simple-send cypher-buffer-process s)
 	      (message "Sent string to buffer %s" sql-buffer)))
 
 	  ;; Display the sql buffer
-	  (if sql-pop-to-buffer-after-send-region
-	      (pop-to-buffer sql-buffer)
-	    (display-buffer sql-buffer)))
-
-    ;; We don't have no stinkin' sql
-    (user-error "No SQL process started"))))
+	  (if cypher-pop-to-buffer-after-send-region
+	      (pop-to-buffer cypher-buffer)
+	    (display-buffer cypher-buffer)))
+    (user-error "No Cypher-shell process started"))))
 
 (defun cypher-send-region (start end)
-  "Send a region to the CYPHER process."
+  "Send a region to the Cypher-shell process."
   (interactive "r")
   (cypher-send-string (buffer-substring-no-properties start end)))
 
 (defun cypher-send-paragraph ()
-  "Send the current paragraph to the CYPHER process."
+  "Send the current paragraph to the Cypher-shell process."
   (interactive)
   (let ((start (save-excursion
 		 (backward-paragraph)
@@ -348,12 +353,12 @@ Based on `comint-mode-map'.")
     (cypher-send-region start end)))
 
 (defun cypher-send-buffer ()
-  "Send the buffer contents to the CYPHER process."
+  "Send the buffer contents to the Cypher-shell process."
   (interactive)
   (cypher-send-region (point-min) (point-max)))
 
 (defun cypher-send-line-and-next ()
-  "Send the current line to the CYPHER process and go to the next line."
+  "Send the current line to the Cypher-shell process and go to the next line."
   (interactive)
   (cypher-send-region (line-beginning-position 1) (line-beginning-position 2))
   (beginning-of-line 2)

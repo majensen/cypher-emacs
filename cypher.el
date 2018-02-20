@@ -229,10 +229,11 @@ PORT Cypher shell port"
 	(while (cypher-buffer-live-p
 		(format "*%s*"
 			(setq buf-name (format "Cypher-%d" i))))
-		(setq i (1+ i))))) 
-    (pop-to-buffer
-     (make-comint buf-name pgm "/dev/null" "-a"
-		  (concat (format "%s://" proto) host ":" port) ))
+	  (setq i (1+ i)))))
+    (setq cypher-buffer
+	  (pop-to-buffer
+	   (make-comint buf-name pgm "/dev/null" "-a"
+			(concat (format "%s://" proto) host ":" port) )))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
     (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
     (setq comint-use-prompt-regexp t)
