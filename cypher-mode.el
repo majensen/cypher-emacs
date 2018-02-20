@@ -52,6 +52,10 @@
   '(":begin" ":commit" ":exit" ":help" ":history" ":param" ":params" ":rollback" ":quit")
   "Cypher-shell commands")
 
+(defvar-local cypher-db-labels nil
+  "Node labels in the db. 
+Set in `cypher-shell'.")
+
 (defvar cypher-kw-re (regexp-opt cypher-kw)
   "Cypher keyword regexp."
   )
@@ -145,17 +149,32 @@ skipped."
 Added to `comint-dynamic-complete-functions' hook"
   ;;          (START END COLLECTION . PROPS)
   (let (
-	 (bounds (bounds-of-thing-at-point 'word))
-	 context
+	(bounds (bounds-of-thing-at-point 'word))
+	(context (buffer-substring (cypher-get-bol) (point)))
+	comp-list
 	 )
-    (setq context (buffer-substring (cypher-get-bol) (point)))
-    (if (not bounds)
-	(list (point) (point) cypher-kw . nil)
-      (if (or (not context)
-	      (string-match "^\\s-*:" context))
-	    (list (cypher-get-bol) (point) cypher-cmd . nil)
-	(list (car bounds) (cdr bounds)  cypher-kw . nil ))))
-)
+    ;; include a prefix colon
+    (if bounds
+	(let ( (c (char-before (car bounds))) )
+	  (if (= c ?:)
+	      (setcar bounds (1- (car bounds))))
+	  )
+      (if (= (char-before (point)) ?:)
+	  (setq bounds (cons (1- (point)) (point)))
+	(setq bounds (cons (point) (point)))
+	))
+    (if (= (car bounds) (point-max))
+	(setq comp-list (list (car bounds) (cdr bounds) ()))
+      (if (= (length context) 0)
+	  (setq comp-list (list (car bounds) (cdr bounds) cypher-kw . nil))
+	(if (string-match "^\\s-*:" context)
+	    (setq comp-list (list (car bounds) (cdr bounds) cypher-cmd . nil))
+	  (if (= (char-after (car bounds)) ?:)
+	      (setq comp-list (list (car bounds) (cdr bounds) cypher-db-labels . nil))
+	    (setq comp-list (list (car bounds) (cdr bounds)  cypher-kw . nil ))
+	    ))))
+    comp-list
+    ))
 
 
 ;; Var
@@ -199,6 +218,7 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
 	(set-keymap-name map 'cypher-interactive-mode-map)); XEmacs
     (define-key map (kbd "RET") 'cypher-accumulate-or-send)
     (define-key map (kbd "TAB") 'completion-at-point)
+    (define-key map (kbd "C-a") 'comint-bol-or-process-mark)
     ;; (define-key map (kbd "C-c C-w") 'sql-copy-column)
     ;; (define-key map (kbd "O") 'sql-magic-go)
     ;; (define-key map (kbd "o") 'sql-magic-go)

@@ -18,32 +18,8 @@
   "Where are cypher mode .el files?")
 
 (load (concat cypher-mode-dir "/" "cypher-mode.el"))
+
 ;; Custom variables
-
-(defvar cypher-remove-cruft t
-  "Remove stupid ASCII table borders and other cruft from output.")
-
-(defvar cypher-statement-terminator ";"
-  "Character that terminates cypher statements (semicolon)")
-
-(defvar cypher-field-sep "\t"
-  "Field separator for cypher-shell tabular output.
-Only meaningful if `cypher-remove-cruft' is set.")
-
-(defvar cypher-field-remove-quotes t
-  "If t, remove double quotes surrounding field values in cypher-shell tabular output.
-Only meaningful if `cypher-remove-cruft' is set.")
-
-(defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
-  "Regexp to identify cypher-shell return status line.")
-
-(defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset")
-
-(defvar-local cypher-buffer-process nil
-  "The cypher-shell process for the buffer. Buffer-local.")
-
-(defvar-local cypher-do-query-timeout 3
-  "Timeout in seconds for `cypher-do-query' queries.")
 
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
@@ -79,6 +55,40 @@ Will be used to set env $NEO4J_HOME"
   "Comm protocols and their ports"
   :type 'alist
   :group 'Cypher)
+
+(defcustom cypher-shell-hook '(cypher-get-db-labels)
+  "Hook run at the end of `cypher-shell'
+For customizing the shell setup."
+  :type 'hook
+  :group 'Cypher)
+
+;; Variables
+
+(defvar cypher-remove-cruft t
+  "Remove stupid ASCII table borders and other cruft from output.")
+
+(defvar cypher-statement-terminator ";"
+  "Character that terminates cypher statements (semicolon)")
+
+(defvar cypher-field-sep "\t"
+  "Field separator for cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
+
+(defvar cypher-field-remove-quotes t
+  "If t, remove double quotes surrounding field values in cypher-shell tabular output.
+Only meaningful if `cypher-remove-cruft' is set.")
+
+(defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
+  "Regexp to identify cypher-shell return status line.")
+
+(defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset")
+
+(defvar-local cypher-buffer-process nil
+  "The cypher-shell process for the buffer. Buffer-local.")
+
+(defvar-local cypher-do-query-timeout 3
+  "Timeout in seconds for `cypher-do-query' queries.")
+
 
 ;; Functions
 
@@ -166,13 +176,17 @@ host: url or ip
 protocol: bolt/http/https
 port: appropriate port
 Note: cypher-shell will use cypher-get-host-interactive to more conveniently get these from custom vars.
-"
+
+Runs `cypher-shell-hook' before exit."
   (interactive (cypher-get-host-interactive))
   (if (not (getenv "NEO4J_HOME"))
       (setenv "NEO4J_HOME" neo4j-home))
   (cypher-comint protocol host port)
   (cypher-interactive-mode)
   (setq cypher-buffer-process (get-buffer-process (current-buffer)))
+  ;;  (accept-process-output cypher-buffer-process cypher-do-query-timeout)
+  (sit-for 1)
+  (run-hooks 'cypher-shell-hook)
 )
 
 (defun cypher-buffer-live-p (buffer)
@@ -193,9 +207,9 @@ BUFFER can be a buffer object or buffer name."
   ;; accumulate if no statement terminator (and not a cypher-shell cmd)
   (let ( (line (thing-at-point 'line)) )
     (if (or (not line)
-	    (string-match (concat "^\\s-*:" cypher-cmd-re "\\s-*$") line)
+	    (string-match (concat cypher-prompt-regexp "\\s-*" cypher-cmd-re "\\s-*$") line)
 	    (string-match (concat cypher-statement-terminator "\\s-*$") line)
-	    (string-match cypher-prompt-regexp line))
+	    (string-match (concat cypher-prompt-regexp "\\s-*$") line))
 	(comint-send-input)
       (comint-accumulate)))
   )
@@ -261,4 +275,19 @@ Pass `t' for INCLUDE-HDR to retrieve the output header line
 	(user-error resp)
       resp)
     ))
+
+(defun cypher-get-db-labels ()
+  "Get the set of labels for the db and set `cypher-db-labels'.
+Run in `cypher-shell-hook'"
+  (condition-case nil
+      (setq cypher-db-labels
+	    (mapcar
+	     (function (lambda (x) (concat ":" x)))
+	     (remove ""
+		     (split-string (cypher-do-query "call db.labels") "[\n|\r]"))))
+    ;; or die quietly 
+    (error nil))
+  )
+    
+    
 
