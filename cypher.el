@@ -62,6 +62,7 @@ For customizing the shell setup."
   :type 'hook
   :group 'Cypher)
 
+
 ;; Variables
 
 (defvar cypher-remove-cruft t
@@ -82,6 +83,13 @@ Only meaningful if `cypher-remove-cruft' is set.")
   "Regexp to identify cypher-shell return status line.")
 
 (defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset")
+
+(defvar cypher-pre-input-hook '(cypher-magic-shell-commands)
+  "Hook which is run prior to sending or accumulating.
+Run in `cypher-accumulate-or-send'
+
+Set to `cypher-magic-shell-commands', which allows one to leave out the
+prefix ':'")
 
 (defvar-local cypher-buffer-process nil
   "The cypher-shell process for the buffer. Buffer-local.")
@@ -202,9 +210,25 @@ BUFFER can be a buffer object or buffer name."
 	   (derived-mode-p 'cypher-interactive-mode))
 	 )))
 
+(defun cypher-magic-shell-commands ()
+  "Twiddles input line to make 'quit' do ':quit', etc."
+  (let (
+	(line (thing-at-point 'line))
+	(word (thing-at-point 'word))
+	(word-bounds (bounds-of-thing-at-point 'word))
+	)
+    (if (string-match (concat cypher-prompt-regexp "\\s-*" word) line)
+	(if (and (member (concat ":" word) cypher-cmd)
+		 (not (eq word "param"))) ;; kludge - param needs arguments
+	    (progn
+	      (delete-region (car word-bounds) (cdr word-bounds))
+	      (insert (concat ":" word)))))
+    ))
+
 (defun cypher-accumulate-or-send ()
   (interactive)
   ;; accumulate if no statement terminator (and not a cypher-shell cmd)
+  (run-hooks 'cypher-pre-input-hook)
   (let ( (line (thing-at-point 'line)) )
     (if (or (not line)
 	    (string-match (concat cypher-prompt-regexp "\\s-*" cypher-cmd-re "\\s-*$") line)

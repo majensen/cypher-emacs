@@ -204,7 +204,7 @@ Added to `comint-dynamic-complete-functions' hook"
 ;; note that preoutput, there are terminal escape codes coming from
 ;; cypher-shell that can screw up regexps in cypher-shell-output-filter
 
-(defvar cypher-prompt-regexp "\\(^\\(?:\e.*?\\)*neo4j> \\(?:\e.*?\\)*\\)"
+(defvar cypher-prompt-regexp "\\(^\\(?:\e.*?\\)*neo4j[>|#] \\(?:\e.*?\\)*\\)"
   "Prompt used to initialize `comint-prompt-regexp'.
 You can change `cypher-prompt-regexp' on `cypher-interactive-mode-hook'.")
 
