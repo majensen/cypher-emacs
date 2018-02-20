@@ -14,16 +14,19 @@
 	      '((name . fix-comint-skip-prompt))
 	      )
 
-(defvar cypher-mode-dir "/home/maj/Code/cypher-emacs"
-  "Where are cypher mode .el files?")
 
 (load (concat cypher-mode-dir "/" "cypher-mode.el"))
 
 ;; Custom variables
 
+(defcustom cypher-mode-dir "."
+  "Where are cypher mode .el files?"
+  :type '(file)
+  :group 'Cypher)
+
 (defcustom cypher-prog "cypher-shell"
   "Neo4j shell program name"
-  :type 'string
+  :type '(string)
   :group 'Cypher)
 
 (defcustom cypher-host-alist
@@ -32,13 +35,13 @@
      :url "localhost")
     )
   "List of cypher endpoints."
-  :type 'alist
+  :type '(alist)
   :group 'Cypher)
 
 (defcustom neo4j-home "/usr/local/share/neo4j"
   "Neo4j home directory.
 Will be used to set env $NEO4J_HOME"
-  :type 'string
+  :type '(string)
   :group 'Cypher)
   
 
@@ -53,13 +56,13 @@ Will be used to set env $NEO4J_HOME"
      :proto "https"
      :port "7473"))
   "Comm protocols and their ports"
-  :type 'alist
+  :type '(alist)
   :group 'Cypher)
 
-(defcustom cypher-shell-hook '(cypher-get-db-labels)
+(defcustom cypher-shell-hook '(cypher-get-db-labels cypher-show-last-welcome)
   "Hook run at the end of `cypher-shell'
 For customizing the shell setup."
-  :type 'hook
+  :type '(hook)
   :group 'Cypher)
 
 
@@ -174,7 +177,8 @@ Note that STRING will come in to this function having terminal escape sequences.
 	      (setq cypher-output-bufstr line)
 	    (setq cypher-output-bufstr ""))))
       (setq lines (cdr lines)))
-    stracc))
+    (setq stracc (replace-regexp-in-string "[\f]" "" stracc))
+    ))
 
 
 ;; Interactive Functions
@@ -224,6 +228,14 @@ BUFFER can be a buffer object or buffer name."
 	      (delete-region (car word-bounds) (cdr word-bounds))
 	      (insert (concat ":" word)))))
     ))
+
+(defun cypher-show-last-welcome ()
+  "Make the last welcome message visible at top of buffer."
+  (end-of-buffer)
+  (if (search-backward-regexp "Connected to Neo4j")
+      (goto-char (point)))
+  (comint-goto-process-mark)
+  )
 
 (defun cypher-accumulate-or-send ()
   (interactive)

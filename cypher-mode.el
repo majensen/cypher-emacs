@@ -168,7 +168,7 @@ skipped."
 Added to `comint-dynamic-complete-functions' hook"
   ;;          (START END COLLECTION . PROPS)
   (let (
-	(bounds (bounds-of-thing-at-point 'word))
+	(bounds (bounds-of-thing-at-point 'symbol))
 	(context (buffer-substring (cypher-get-bol) (point)))
 	comp-list
 	)
