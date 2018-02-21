@@ -220,12 +220,12 @@ You can change `cypher-prompt-length' on `cypher-interactive-mode-hook'.")
 
 (defcustom cypher-interactive-mode-hook '()
   "Hook for customizing `cypher-interactive-mode'."
-  :type 'hook
+  :type '(hook)
   :group 'Cypher)
 
 (defcustom cypher-mode-hook '()
   "Hook for customizing `cypher-mode'."
-  :type 'hook
+  :type '(hook)
   :group 'Cypher)
 
 ;; Keymap for cypher-interactive-mode.
@@ -254,7 +254,7 @@ Based on `comint-mode-map'.")
     (define-key map (kbd "C-c C-s") 'cypher-send-string)
     (define-key map (kbd "C-c C-b") 'cypher-send-buffer)
     (define-key map (kbd "C-c C-n") 'cypher-send-line-and-next)
-    ;; (define-key map (kbd "C-c C-i") 'cypher-product-interactive)
+    ;; (define-key map (kbd "C-c C-i") 'cypher-interactive)
     (define-key map [remap beginning-of-defun] 'cypher-beginning-of-statement)
     (define-key map [remap end-of-defun] 'cypher-end-of-statement)
     map)

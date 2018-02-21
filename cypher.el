@@ -59,7 +59,7 @@ Will be used to set env $NEO4J_HOME"
   :type '(alist)
   :group 'Cypher)
 
-(defcustom cypher-shell-hook '(cypher-get-db-labels cypher-show-last-welcome)
+(defcustom cypher-shell-hook '(cypher-get-db-labels)
   "Hook run at the end of `cypher-shell'
 For customizing the shell setup."
   :type '(hook)
@@ -290,7 +290,8 @@ Pass `t' for INCLUDE-HDR to retrieve the output header line
       (user-error "Buffer has no process"))
   (if (not (string-match ";\\s-*[\n]$" qry))
       (setq qry (concat qry ";\n")))
-  (let ( resp )
+  (let ( resp
+	 (start (window-start) ) )
     (save-excursion
       (comint-goto-process-mark)
       (let ( (cur (point)) (aft (point-marker)))
@@ -300,6 +301,10 @@ Pass `t' for INCLUDE-HDR to retrieve the output header line
 	(setq resp (buffer-substring-no-properties cur aft))
 	(delete-region cur aft)
 	(set-marker aft nil)))
+    ;; if many rows returned, the query can scroll original content off-screen,
+    ;; and the deletion leaves point not visible in window. This
+    ;; tries to take care of that:
+    (set-window-start (selected-window) start)
     (setq resp (split-string resp "[\n\r]"))
     (if (not include-hdr) (setq resp (cdr resp)))
     (setq resp (mapconcat
