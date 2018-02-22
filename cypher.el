@@ -6,6 +6,7 @@
 
 (require 'thingatpt)
 (require 'comint)
+(require 'files)
 (add-function :after (symbol-function 'comint-skip-prompt)
 	      (lambda ()
 		(if (and (bolp)
@@ -14,8 +15,6 @@
 	      '((name . fix-comint-skip-prompt))
 	      )
 
-
-(load (concat cypher-mode-dir "/" "cypher-mode.el"))
 
 ;; Custom variables
 
@@ -66,10 +65,14 @@ For customizing the shell setup."
   :group 'Cypher)
 
 
+(load (replace-regexp-in-string
+       "/+" "/" (concat cypher-mode-dir "/" "cypher-mode.el")))
+
 ;; Variables
 
 (defvar cypher-remove-cruft t
-  "Remove stupid ASCII table borders and other cruft from output.")
+  "Remove stupid ASCII table borders and other cruft from output.
+Set to nil for unfiltered output.")
 
 (defvar cypher-statement-terminator ";"
   "Character that terminates cypher statements (semicolon)")
@@ -85,21 +88,21 @@ Only meaningful if `cypher-remove-cruft' is set.")
 (defvar cypher-return-status-regexp ".*row.? available after [0-9]+ ms"
   "Regexp to identify cypher-shell return status line.")
 
-(defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset")
+(defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset"
+  "Regexp to identify cypher-shell error messages.")
 
 (defvar cypher-pre-input-hook '(cypher-magic-shell-commands)
   "Hook which is run prior to sending or accumulating.
 Run in `cypher-accumulate-or-send'
 
-Set to `cypher-magic-shell-commands', which allows one to leave out the
-prefix ':'")
+Default set to `cypher-magic-shell-commands', which allows one to leave out the
+prefix ':' for most cypher-shell commands.")
 
 (defvar-local cypher-buffer-process nil
   "The cypher-shell process for the buffer. Buffer-local.")
 
 (defvar-local cypher-do-query-timeout 3
-  "Timeout in seconds for `cypher-do-query' queries.")
-
+  "Timeout in seconds for `cypher-do-query' queries. Buffer-local.")
 
 ;; Functions
 
@@ -184,16 +187,16 @@ Note that STRING will come in to this function having terminal escape sequences.
 ;; Interactive Functions
 (defun cypher-shell (arg host protocol port)
   "Create a new cypher-shell window.
-host: url or ip
-protocol: bolt/http/https
-port: appropriate port
+HOST url or ip
+PROTOCOL bolt/http/https
+PORT: appropriate Cypher-shell port
 Note: cypher-shell will use cypher-get-host-interactive to more conveniently get these from custom vars.
 
 Runs `cypher-shell-hook' before exit."
   (interactive (cypher-get-host-interactive))
   (if (not (getenv "NEO4J_HOME"))
       (setenv "NEO4J_HOME" neo4j-home))
-  (cypher-comint protocol host port)
+  (cypher-comint host protocol port)
   (cypher-interactive-mode)
   (setq cypher-buffer-process (get-buffer-process (current-buffer)))
   ;;  (accept-process-output cypher-buffer-process cypher-do-query-timeout)
@@ -215,7 +218,9 @@ BUFFER can be a buffer object or buffer name."
 	 )))
 
 (defun cypher-magic-shell-commands ()
-  "Twiddles input line to make 'quit' do ':quit', etc."
+  "Twiddles input line to make 'quit' do ':quit', etc.
+Note this won't work for commands that need arguments (currently only 
+:param)."
   (let (
 	(line (thing-at-point 'line))
 	(word (thing-at-point 'word))
@@ -229,13 +234,6 @@ BUFFER can be a buffer object or buffer name."
 	      (insert (concat ":" word)))))
     ))
 
-(defun cypher-show-last-welcome ()
-  "Make the last welcome message visible at top of buffer."
-  (end-of-buffer)
-  (if (search-backward-regexp "Connected to Neo4j")
-      (goto-char (point)))
-  (comint-goto-process-mark)
-  )
 
 (defun cypher-accumulate-or-send ()
   (interactive)
@@ -250,11 +248,10 @@ BUFFER can be a buffer object or buffer name."
       (comint-accumulate)))
   )
 
-(defun cypher-comint (proto host port)
+(defun cypher-comint (host proto port)
     "Set up comint buffer for cypher-shell.
-
-PROTO protocol (http https bolt)
 HOST url or ip
+PROTO protocol (http https bolt)
 PORT Cypher shell port"
     (let (( pgm (executable-find cypher-prog))
 	  ( buf-name "Cypher"))
@@ -281,7 +278,7 @@ PORT Cypher shell port"
 QRY is the query as string. The query is executed in the buffer
 and the response is extracted and cleaned up. Response returned
 as a string.
-Pass `t' for INCLUDE-HDR to retrieve the output header line 
+Pass t for INCLUDE-HDR to retrieve the output header line 
 \(i.e., the column names\)"
   (if (not (boundp 'cypher-buffer-process))
       (user-error "Not a Cypher process buffer"))
