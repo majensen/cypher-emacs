@@ -18,7 +18,7 @@
 
 ;; Custom variables
 
-(defcustom cypher-mode-dir "."
+(defcustom cypher-mode-dir "/Users/jensenma/sandbox/cypher-emacs"
   "Where are cypher mode .el files?"
   :type '(file)
   :group 'Cypher)
@@ -91,10 +91,12 @@ Only meaningful if `cypher-remove-cruft' is set.")
 (defvar cypher-error-status-regexp "(line[^,]+, column[^(]+(offset"
   "Regexp to identify cypher-shell error messages.")
 
+(defvar cypher-valid-parm-name-regexp "^[a-zA-Z][a-zA-Z0-9]*$"
+  "Regexp that matches a token that is a valid Cypher parameter name.")
+
 (defvar cypher-pre-input-hook '(cypher-magic-shell-commands)
   "Hook which is run prior to sending or accumulating.
 Run in `cypher-accumulate-or-send'
-
 Default set to `cypher-magic-shell-commands', which allows one to leave out the
 prefix ':' for most cypher-shell commands.")
 
@@ -241,7 +243,7 @@ Note this won't work for commands that need arguments (currently only
   (run-hooks 'cypher-pre-input-hook)
   (let ( (line (thing-at-point 'line)) )
     (if (or (not line)
-	    (string-match (concat cypher-prompt-regexp "\\s-*" cypher-cmd-re "\\s-*$") line)
+	    (string-match (concat cypher-prompt-regexp "\\s-*" cypher-cmd-re ".*$") line)
 	    (string-match (concat cypher-statement-terminator "\\s-*$") line)
 	    (string-match (concat cypher-prompt-regexp "\\s-*$") line))
 	(comint-send-input)
@@ -328,5 +330,50 @@ Run in `cypher-shell-hook'"
     (error nil))
   )
     
-    
+(defun cypher-param-query (qry parm-buffer-or-name)
+  "Run a parameterized query over a list of values for each parameter.
+QRY is the query as string, which may include parameters as $<param>.
+PARM-BUFFER-OR-NAME is a text buffer or buffer name with the following format:
+Line 1: parameter names as <param1> <param2> ..., tab-separated
+Following lines: parameter values to be set according to Line 1.
+QRY will be executed for each row of parameter values in 
+PARM-BUFFER, after setting the parameters. 
+Output is accumulated and returned."
+  (if (not (stringp qry))
+      (user-error "QRY must be a string, not %s" (type-of qry)))
+  (if (and (not (bufferp parm-buffer-or-name))
+	   (not (get-buffer parm-buffer-or-name))
+	   )
+      (user-error "PARM-BUFFER must be a buffer or name , not %s" parm-buffer-or-name))
+  (let ((parm-buffer (get-buffer parm-buffer-or-name))
+	line parms )
+    (save-current-buffer
+      (set-buffer parm-buffer)
+      (goto-char (point-min))
+      (setq line (thing-at-point 'line))
+      (setq parms (split-string line nil))
+      (if (= (length parms) 0)
+	  (user-error "No parameters in header line"))
+      (mapcar (lambda (x) (if (not (string-match cypher-valid-parm-name-regexp x))
+			      (user-error "'%s' is not a valid Cypher parameter name" x)))
+	      parms)
+      (forward-line)
+      (while (not (eobp))
+	(let* (
+	       (ln (thing-at-point 'line))
+	       (values (split-string ln "[\t]"))
+	       (assign (mapcar (lambda (x) (cons x nil)) parms))
+	      )
+	  (if (= 0 (length values))
+	      (forward-line) ;; skip
+	    (mapcar (lambda (x) (setcdr x (pop values))) assign)
+	    (mapcar (lambda (x) (message ":param %s %s" (car x) (cdr x)))
+		    assign)
+	    )
+	  )
+	(forward-line))
+      parms
+      ))
+
+  )
 
