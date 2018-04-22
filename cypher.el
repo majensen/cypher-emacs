@@ -94,6 +94,12 @@ Only meaningful if `cypher-remove-cruft' is set.")
 (defvar cypher-valid-parm-name-regexp "^[a-zA-Z][a-zA-Z0-9]*$"
   "Regexp that matches a token that is a valid Cypher parameter name.")
 
+(defvar cypher-number-regexp "^\\([+-]?[0-9]+\\)$\\|^[+-]?\\(\\(?:[0-9]+\\.[0-9]+\\)\\|\\([0-9]+\\.?\\)\\|\\(\\.?[0-9]+\\)\\)\\([eE][+-]?[0-9]+\\)$"
+  "Regexp that matches things that look like numbers.")
+
+(defvar cypher-quoted-regexp "^'.*'$\\|^\".*\"$"
+  "Regexp that matches a quoted thing.")
+
 (defvar cypher-pre-input-hook '(cypher-magic-shell-commands)
   "Hook which is run prior to sending or accumulating.
 Run in `cypher-accumulate-or-send'
@@ -105,6 +111,7 @@ prefix ':' for most cypher-shell commands.")
 
 (defvar-local cypher-do-query-timeout 3
   "Timeout in seconds for `cypher-do-query' queries. Buffer-local.")
+
 
 ;; Functions
 
@@ -287,8 +294,10 @@ Pass t for INCLUDE-HDR to retrieve the output header line
   (if ( or (not cypher-buffer-process)
 	   (not (process-live-p cypher-buffer-process)))
       (user-error "Buffer has no process"))
-  (if (not (string-match ";\\s-*[\n]$" qry))
-      (setq qry (concat qry ";\n")))
+  (if (and (not (string-match ";\\s-*[\n]$" qry))
+	   (not (string-match "^\\s-*:" qry)))
+      (setq qry (concat qry ";\n"))
+    (setq qry (concat qry "\n")))
   (let ( resp
 	 (start (window-start) ) )
     (save-excursion
@@ -305,7 +314,8 @@ Pass t for INCLUDE-HDR to retrieve the output header line
     ;; tries to take care of that:
     (set-window-start (selected-window) start)
     (setq resp (split-string resp "[\n\r]"))
-    (if (not include-hdr) (setq resp (cdr resp)))
+    (if (and (not include-hdr)
+	     (not (string-match "^\\s-*:" qry))) (setq resp (cdr resp)))
     (setq resp (mapconcat
 		(function (lambda (x)
 			    (if (string-match comint-prompt-regexp x) ""
@@ -332,13 +342,14 @@ Run in `cypher-shell-hook'"
     
 (defun cypher-param-query (qry parm-buffer-or-name)
   "Run a parameterized query over a list of values for each parameter.
-QRY is the query as string, which may include parameters as $<param>.
-PARM-BUFFER-OR-NAME is a text buffer or buffer name with the following format:
-Line 1: parameter names as <param1> <param2> ..., tab-separated
-Following lines: parameter values to be set according to Line 1.
-QRY will be executed for each row of parameter values in 
-PARM-BUFFER, after setting the parameters. 
-Output is accumulated and returned."
+QRY is the query as string, which may include parameters as
+$<param>.  PARM-BUFFER-OR-NAME is a text buffer or buffer name
+with the following format: Line 1: parameter names as <param1>
+<param2> ..., tab-separated Following lines: parameter values to
+be set according to Line 1.  QRY will be executed for each row of
+parameter values in PARM-BUFFER, after setting the parameters.
+Output is accumulated and returned as a list of \n-terminated
+strings"
   (if (not (stringp qry))
       (user-error "QRY must be a string, not %s" (type-of qry)))
   (if (and (not (bufferp parm-buffer-or-name))
@@ -346,7 +357,9 @@ Output is accumulated and returned."
 	   )
       (user-error "PARM-BUFFER must be a buffer or name , not %s" parm-buffer-or-name))
   (let ((parm-buffer (get-buffer parm-buffer-or-name))
-	line parms )
+	line parms
+	(parm-cmds ())
+	(result ()) )
     (save-current-buffer
       (set-buffer parm-buffer)
       (goto-char (point-min))
@@ -361,19 +374,37 @@ Output is accumulated and returned."
       (while (not (eobp))
 	(let* (
 	       (ln (thing-at-point 'line))
-	       (values (split-string ln "[\t]"))
+	       (values (split-string ln "[\t]" nil "[\n]"))
 	       (assign (mapcar (lambda (x) (cons x nil)) parms))
 	      )
 	  (if (= 0 (length values))
 	      (forward-line) ;; skip
-	    (mapcar (lambda (x) (setcdr x (pop values))) assign)
-	    (mapcar (lambda (x) (message ":param %s %s" (car x) (cdr x)))
-		    assign)
+	    (dolist (x assign)
+	       (let ( (v (pop values)) )
+		 (if (not v)
+		     (setq v "null")
+		   (if (and (not (string-match cypher-number-regexp v))
+			    (not (string-match cypher-quoted-regexp v)))
+		       (setq v (concat "\"" v "\""))
+		     t))
+		 (setcdr x v)))
+	    (push (mapcar
+		   (lambda (x)
+		     (format ":param %s %s" (car x) (cdr x)))
+		   assign)
+		  parm-cmds)
 	    )
 	  )
 	(forward-line))
-      parms
-      ))
-
-  )
+      )
+    (setq parm-cmds (nreverse parm-cmds))
+    ;; dolist instead?
+    (dolist (cc parm-cmds)
+      (dolist (c cc)
+	(cypher-do-query c)
+	(setq result (append result (split-string (cypher-do-query qry) "[\n]" t) ))
+	))
+    (comint-goto-process-mark)    
+    result
+    ))
 
