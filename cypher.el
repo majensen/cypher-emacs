@@ -300,6 +300,11 @@ Pass t for INCLUDE-HDR to retrieve the output header line
     (setq qry (concat qry "\n")))
   (let ( resp
 	 (start (window-start) ) )
+    ;; use comint-redirect-send-command(-to-process)
+    ;; create a temp buffer to accept the output and parse from there
+    ;; see if you have to clean up the command itself from the process buffer
+    ;; still need accept-process-output to synchronize
+    ;; don't need the extra marker or to adjust the window-start, presumably
     (save-excursion
       (comint-goto-process-mark)
       (let ( (cur (point)) (aft (point-marker)))
