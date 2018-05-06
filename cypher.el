@@ -18,7 +18,7 @@
 
 ;; Custom variables
 
-(defcustom cypher-mode-dir "/Users/jensenma/sandbox/cypher-emacs"
+(defcustom cypher-mode-dir "/Users/maj/Code/cypher-emacs/"
   "Where are cypher mode .el files?"
   :type '(file)
   :group 'Cypher)
@@ -306,18 +306,16 @@ Pass t for INCLUDE-HDR to retrieve the output header line
     ;; still need accept-process-output to synchronize
     ;; don't need the extra marker or to adjust the window-start, presumably
     (save-excursion
-      (comint-goto-process-mark)
-      (let ( (cur (point)) (aft (point-marker)))
-	(set-marker-insertion-type aft t)
-	(comint-send-string cypher-buffer-process qry)
-	(accept-process-output cypher-buffer-process cypher-do-query-timeout)
-	(setq resp (buffer-substring-no-properties cur aft))
-	(delete-region cur aft)
-	(set-marker aft nil)))
-    ;; if many rows returned, the query can scroll original content off-screen,
-    ;; and the deletion leaves point not visible in window. This
-    ;; tries to take care of that:
-    (set-window-start (selected-window) start)
+      (let ( (cproc cypher-buffer-process) )
+	(with-temp-buffer
+	  (let ( (tmpb (current-buffer)) )
+	    (comint-redirect-send-command-to-process
+	     qry tmpb cproc nil nil)
+	    (accept-process-output cypher-buffer-process
+				   cypher-do-query-timeout)
+	    (setq resp (cypher-shell-output-filter (buffer-string)))
+	    ))
+	))
     (setq resp (split-string resp "[\n\r]"))
     (if (and (not include-hdr)
 	     (not (string-match "^\\s-*:" qry))) (setq resp (cdr resp)))
@@ -325,8 +323,9 @@ Pass t for INCLUDE-HDR to retrieve the output header line
 		(function (lambda (x)
 			    (if (string-match comint-prompt-regexp x) ""
 			      (concat x "\n"))
-			    ))
+			    )) 
 		resp ""))
+    (setq resp (replace-regexp-in-string "[\n]+" "\n" resp))
     (if (string-match cypher-error-status-regexp resp)
 	(user-error resp)
       resp)
