@@ -190,6 +190,7 @@ Note that STRING will come in to this function having terminal escape sequences.
 	    (setq cypher-output-bufstr ""))))
       (setq lines (cdr lines)))
     (setq stracc (replace-regexp-in-string "[\f]" "" stracc))
+    (setq stracc (replace-regexp-in-string "[\n]+" "\n" stracc))
     ))
 
 
@@ -208,7 +209,6 @@ Runs `cypher-shell-hook' before exit."
   (cypher-comint host protocol port)
   (cypher-interactive-mode)
   (setq cypher-buffer-process (get-buffer-process (current-buffer)))
-  ;;  (accept-process-output cypher-buffer-process cypher-do-query-timeout)
   (sit-for 1)
   (run-hooks 'cypher-shell-hook)
 )
@@ -282,11 +282,13 @@ PORT Cypher shell port"
     (setq comint-process-echoes t)
      ))
 
-(defun cypher-do-query (qry &optional include-hdr)
+(defun cypher-do-query (qry &optional include-hdr in-cbuf)
   "Execute a cypher query directly and return response.
-QRY is the query as string. The query is executed in the buffer
-and the response is extracted and cleaned up. Response returned
-as a string.
+QRY is the query as string. The query is executed in the buffer,
+but response is collected in a temporary buffer and extracted,
+unless IN-CBUF is t.
+Response returned as a string.
+
 Pass t for INCLUDE-HDR to retrieve the output header line 
 \(i.e., the column names\)"
   (if (not (boundp 'cypher-buffer-process))
@@ -298,38 +300,43 @@ Pass t for INCLUDE-HDR to retrieve the output header line
 	   (not (string-match "^\\s-*:" qry)))
       (setq qry (concat qry ";\n"))
     (setq qry (concat qry "\n")))
-  (let ( resp
-	 (start (window-start) ) )
-    ;; use comint-redirect-send-command(-to-process)
-    ;; create a temp buffer to accept the output and parse from there
-    ;; see if you have to clean up the command itself from the process buffer
-    ;; still need accept-process-output to synchronize
-    ;; don't need the extra marker or to adjust the window-start, presumably
-    (save-excursion
-      (let ( (cproc cypher-buffer-process) )
-	(with-temp-buffer
-	  (let ( (tmpb (current-buffer)) )
-	    (comint-redirect-send-command-to-process
-	     qry tmpb cproc nil nil)
-	    (accept-process-output cypher-buffer-process
-				   cypher-do-query-timeout)
-	    (setq resp (cypher-shell-output-filter (buffer-string)))
-	    ))
-	))
-    (setq resp (split-string resp "[\n\r]"))
-    (if (and (not include-hdr)
-	     (not (string-match "^\\s-*:" qry))) (setq resp (cdr resp)))
-    (setq resp (mapconcat
-		(function (lambda (x)
-			    (if (string-match comint-prompt-regexp x) ""
-			      (concat x "\n"))
-			    )) 
-		resp ""))
-    (setq resp (replace-regexp-in-string "[\n]+" "\n" resp))
-    (if (string-match cypher-error-status-regexp resp)
-	(user-error resp)
-      resp)
-    ))
+  (let ( resp )
+    (if in-cbuf
+	(progn
+	  (comint-send-string cypher-buffer-process qry)
+	  (accept-process-output cypher-buffer-process
+				 cypher-do-query-timeout)
+	  (save-excursion
+	    (goto-char (process-mark cypher-buffer-process))
+	    (forward-line 0)
+	    (buffer-substring-no-properties comint-last-input-end (point)))
+	  )
+      (save-excursion
+	(let ( (cproc cypher-buffer-process) )
+	  (with-temp-buffer
+	    (let ( (tmpb (current-buffer)) )
+	      (comint-redirect-send-command-to-process
+	       qry tmpb cproc nil nil)
+	      (accept-process-output cypher-buffer-process
+				     cypher-do-query-timeout)
+	      (setq resp (cypher-shell-output-filter (buffer-string)))
+	      ))
+	  ))
+      (setq resp (split-string resp "[\n\r]"))
+      (if (and (not include-hdr)
+	       (not (string-match "^\\s-*:" qry))) (setq resp (cdr resp)))
+      (setq resp (mapconcat
+		  (function (lambda (x)
+			      (if (string-match comint-prompt-regexp x) ""
+				(concat x "\n"))
+			      )) 
+		  resp ""))
+      (setq resp (replace-regexp-in-string "[\n]+" "\n" resp))
+      (if (string-match cypher-error-status-regexp resp)
+	  (user-error resp)
+	resp)
+    )))
+
 
 (defun cypher-get-db-labels ()
   "Get the set of labels for the db and set `cypher-db-labels'.
@@ -348,12 +355,14 @@ Run in `cypher-shell-hook'"
   "Run a parameterized query over a list of values for each parameter.
 QRY is the query as string, which may include parameters as
 $<param>.  PARM-BUFFER-OR-NAME is a text buffer or buffer name
-with the following format: Line 1: parameter names as <param1>
-<param2> ..., tab-separated Following lines: parameter values to
-be set according to Line 1.  QRY will be executed for each row of
-parameter values in PARM-BUFFER, after setting the parameters.
-Output is accumulated and returned as a list of \n-terminated
-strings"
+with the following format:
+
+- Line 1: parameter names as <param1> <param2> ..., tab-separated
+- Following lines: parameter values to be set according to Line 1.
+
+QRY will be executed for each row of parameter values in
+PARM-BUFFER, after setting the parameters.  Output is accumulated
+and returned as a list of newline-terminated strings."
   (if (not (stringp qry))
       (user-error "QRY must be a string, not %s" (type-of qry)))
   (if (and (not (bufferp parm-buffer-or-name))
@@ -361,7 +370,7 @@ strings"
 	   )
       (user-error "PARM-BUFFER must be a buffer or name , not %s" parm-buffer-or-name))
   (let ((parm-buffer (get-buffer parm-buffer-or-name))
-	line parms
+	line parms outl
 	(parm-cmds ())
 	(result ()) )
     (save-current-buffer
@@ -380,8 +389,9 @@ strings"
 	       (ln (thing-at-point 'line))
 	       (values (split-string ln "[\t]" nil "[\n]"))
 	       (assign (mapcar (lambda (x) (cons x nil)) parms))
-	      )
-	  (if (= 0 (length values))
+	       )
+	  (setq ln (replace-regexp-in-string "[\n]$" "" ln))
+	  (if (string-match "^\\s-*$" ln)
 	      (forward-line) ;; skip
 	    (dolist (x assign)
 	       (let ( (v (pop values)) )
@@ -394,7 +404,7 @@ strings"
 		 (setcdr x v)))
 	    (push (mapcar
 		   (lambda (x)
-		     (format ":param %s %s" (car x) (cdr x)))
+		     (cons (format ":param %s %s" (car x) (cdr x)) (cdr x)))
 		   assign)
 		  parm-cmds)
 	    )
@@ -405,10 +415,14 @@ strings"
     ;; dolist instead?
     (dolist (cc parm-cmds)
       (dolist (c cc)
-	(cypher-do-query c)
-	(setq result (append result (split-string (cypher-do-query qry) "[\n]" t) ))
+	(cypher-do-query (car c)))
+      (setq outl (split-string (cypher-do-query qry) "[\n]" t))
+      ;; adding the parameter values to front of response string
+      (let ( (ln (mapconcat #'cdr cc "\t")) )
+	(dolist (out outl) 
+	  (push (concat ln "\t" out) result))
 	))
     (comint-goto-process-mark)    
-    result
+    (nreverse result)
     ))
 
