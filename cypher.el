@@ -115,21 +115,6 @@ prefix ':' for most cypher-shell commands.")
 
 ;; Functions
 
-(defun cypher-get-host-interactive ()
-  "Interactively choose host and protocol/port."
-  (let* ( (hst (completing-read "Host: " cypher-host-alist))
-	  (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
-	  (h (assoc (intern hst) cypher-host-alist))
-	  (p (assoc (intern prt) cypher-proto-alist))
-	 )
-    (list
-     current-prefix-arg
-     (or (plist-get (cdr h) :address)
-	 (plist-get (cdr h) :url))
-     (plist-get (cdr p) :proto)
-     (plist-get (cdr p) :port)
-    )))
-
 (defvar cypher-output-bufstr ""
   "Cypher shell output buffer string.")
 
@@ -210,8 +195,38 @@ Runs `cypher-shell-hook' before exit."
   (cypher-interactive-mode)
   (setq cypher-buffer-process (get-buffer-process (current-buffer)))
   (sit-for 1)
-  (run-hooks 'cypher-shell-hook)
-)
+  (run-hooks 'cypher-shell-hook))
+
+(defun cypher-get-host-interactive ()
+  "Interactively choose host and protocol/port."
+  (let* ( (hst (completing-read "Host: " cypher-host-alist))
+	  (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
+	  (h (assoc (intern hst) cypher-host-alist))
+	  (p (assoc (intern prt) cypher-proto-alist))
+	 )
+    (list
+     current-prefix-arg
+     (or (plist-get (cdr h) :address)
+	 (plist-get (cdr h) :url))
+     (plist-get (cdr p) :proto)
+     (plist-get (cdr p) :port)
+     )))
+
+(defun cypher-param-query-interactive (parm-buf)
+  "Interactively run a paramaterized query.
+Should be run in the cypher-shell buffer, after the query has been
+entered.
+"
+  (interactive "Bparam buffer:")
+  (let ( resp
+	 qry
+	 (outbuf
+	  (get-buffer-create (generate-new-buffer-name "*Cypher Output*"))))
+    (with-current-buffer outbuf
+      (insert (cypher-param-query qry parm-buf))
+      (goto-char (point-min))
+      (pop-to-buffer outbuf))
+  )
 
 (defun cypher-buffer-live-p (buffer)
   "Return non-nil if the process associated with buffer is live.
