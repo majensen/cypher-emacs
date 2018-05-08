@@ -212,21 +212,33 @@ Runs `cypher-shell-hook' before exit."
      (plist-get (cdr p) :port)
      )))
 
-(defun cypher-param-query-interactive (parm-buf)
+(defun cypher-param-query-interactive (parm-buf pt)
   "Interactively run a paramaterized query.
 Should be run in the cypher-shell buffer, after the query has been
 entered.
 "
-  (interactive "Bparam buffer:")
+  (interactive "BParam buffer:\nd")
+  (if (not (boundp 'cypher-buffer-process))
+      (user-error "Not a Cypher process buffer"))
+  (if ( or (not cypher-buffer-process)
+	   (not (process-live-p cypher-buffer-process)))
+      (user-error "Buffer has no process"))
+  (display-buffer parm-buf '((display-buffer-at-bottom display-buffer-pop-up-window) (height . 7)))
   (let ( resp
-	 qry
+	 (qry (buffer-substring-no-properties (process-mark cypher-buffer-process) pt))
 	 (outbuf
 	  (get-buffer-create (generate-new-buffer-name "*Cypher Output*"))))
+    (setq qry (replace-regexp-in-string "[\n]+" " " qry))
+    (if (and (not (string-match ";\\s-*[\n]*$" qry))
+	     (not (string-match "^\\s-*:" qry)))
+	(setq qry (concat qry ";\n"))
+      (setq qry (concat qry "\n")))
+    (setq resp (cypher-param-query qry parm-buf)) 
     (with-current-buffer outbuf
-      (insert (cypher-param-query qry parm-buf))
-      (goto-char (point-min))
-      (pop-to-buffer outbuf))
-  )
+      (mapcar (lambda (x) (insert (concat x "\n"))) resp)
+      (goto-char (point-min)))
+    (pop-to-buffer outbuf)
+    ))
 
 (defun cypher-buffer-live-p (buffer)
   "Return non-nil if the process associated with buffer is live.
@@ -314,7 +326,7 @@ Pass t for INCLUDE-HDR to retrieve the output header line
   (if (and (not (string-match ";\\s-*[\n]$" qry))
 	   (not (string-match "^\\s-*:" qry)))
       (setq qry (concat qry ";\n"))
-    (setq qry (concat qry "\n")))
+    (setq qry (concat qry "\n"))) 
   (let ( resp )
     (if in-cbuf
 	(progn
