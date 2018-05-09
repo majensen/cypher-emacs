@@ -223,7 +223,6 @@ entered.
   (if ( or (not cypher-buffer-process)
 	   (not (process-live-p cypher-buffer-process)))
       (user-error "Buffer has no process"))
-  (display-buffer parm-buf '((display-buffer-at-bottom display-buffer-pop-up-window) (height . 7)))
   (let ( resp
 	 (qry (buffer-substring-no-properties (process-mark cypher-buffer-process) pt))
 	 (outbuf
@@ -237,7 +236,7 @@ entered.
     (with-current-buffer outbuf
       (mapcar (lambda (x) (insert (concat x "\n"))) resp)
       (goto-char (point-min)))
-    (pop-to-buffer outbuf)
+    (display-buffer outbuf)
     ))
 
 (defun cypher-buffer-live-p (buffer)
@@ -314,19 +313,20 @@ PORT Cypher shell port"
 QRY is the query as string. The query is executed in the buffer,
 but response is collected in a temporary buffer and extracted,
 unless IN-CBUF is t.
-Response returned as a string.
-
-Pass t for INCLUDE-HDR to retrieve the output header line 
+Response returned as a string, each row separated by newline.
+Pass t for INCLUDE-HDR to retrieve the output header line.
 \(i.e., the column names\)"
   (if (not (boundp 'cypher-buffer-process))
       (user-error "Not a Cypher process buffer"))
   (if ( or (not cypher-buffer-process)
 	   (not (process-live-p cypher-buffer-process)))
       (user-error "Buffer has no process"))
-  (if (and (not (string-match ";\\s-*[\n]$" qry))
-	   (not (string-match "^\\s-*:" qry)))
+  (if (not (or (string-match ";\\s-*$" qry)
+	       (string-match "^\\s-*:" qry)
+	       ))
       (setq qry (concat qry ";\n"))
-    (setq qry (concat qry "\n"))) 
+    (setq qry (concat qry "\n")))
+  (setq qry (replace-regexp-in-string "[\n]+" "\n" qry))
   (let ( resp )
     (if in-cbuf
 	(progn
@@ -338,17 +338,17 @@ Pass t for INCLUDE-HDR to retrieve the output header line
 	    (forward-line 0)
 	    (buffer-substring-no-properties comint-last-input-end (point)))
 	  )
-      (save-excursion
-	(let ( (cproc cypher-buffer-process) )
+      (let ( (cproc cypher-buffer-process) )
 	  (with-temp-buffer
 	    (let ( (tmpb (current-buffer)) )
 	      (comint-redirect-send-command-to-process
-	       qry tmpb cproc nil nil)
+	       qry tmpb cproc nil t)
 	      (accept-process-output cypher-buffer-process
 				     cypher-do-query-timeout)
 	      (setq resp (cypher-shell-output-filter (buffer-string)))
-	      ))
-	  ))
+	      )))
+      (if (string-match cypher-error-status-regexp resp)
+	  (error resp))
       (setq resp (split-string resp "[\n\r]"))
       (if (and (not include-hdr)
 	       (not (string-match "^\\s-*:" qry))) (setq resp (cdr resp)))
@@ -359,9 +359,7 @@ Pass t for INCLUDE-HDR to retrieve the output header line
 			      )) 
 		  resp ""))
       (setq resp (replace-regexp-in-string "[\n]+" "\n" resp))
-      (if (string-match cypher-error-status-regexp resp)
-	  (user-error resp)
-	resp)
+      resp
     )))
 
 
@@ -439,7 +437,6 @@ and returned as a list of newline-terminated strings."
 	(forward-line))
       )
     (setq parm-cmds (nreverse parm-cmds))
-    ;; dolist instead?
     (dolist (cc parm-cmds)
       (dolist (c cc)
 	(cypher-do-query (car c)))
