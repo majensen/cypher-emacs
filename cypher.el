@@ -345,6 +345,7 @@ Pass t for INCLUDE-HDR to retrieve the output header line.
 	       qry tmpb cproc nil t)
 	      (accept-process-output cypher-buffer-process
 				     cypher-do-query-timeout)
+	      (comint-redirect-cleanup)
 	      (setq resp (cypher-shell-output-filter (buffer-string)))
 	      )))
       (if (string-match cypher-error-status-regexp resp)
@@ -373,7 +374,7 @@ Run in `cypher-shell-hook'"
 	     (remove ""
 		     (split-string (cypher-do-query "call db.labels") "[\n|\r]"))))
     ;; or die quietly 
-    (error nil))
+    (error "hey!"))
   )
     
 (defun cypher-param-query (qry parm-buffer-or-name)
