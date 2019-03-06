@@ -18,7 +18,7 @@
 
 ;; Custom variables
 
-(defcustom cypher-mode-dir "/Users/maj/Code/cypher-emacs/"
+(defcustom cypher-mode-dir "/Users/jensenma/Sandbox/cypher-emacs/"
   "Where are cypher mode .el files?"
   :type '(file)
   :group 'Cypher)
@@ -180,7 +180,7 @@ Note that STRING will come in to this function having terminal escape sequences.
 
 
 ;; Interactive Functions
-(defun cypher-shell (arg host protocol port)
+(defun cypher-shell (arg host protocol port &optional user passw)
   "Create a new cypher-shell window.
 HOST url or ip
 PROTOCOL bolt/http/https
@@ -191,7 +191,9 @@ Runs `cypher-shell-hook' before exit."
   (interactive (cypher-get-host-interactive))
   (if (not (getenv "NEO4J_HOME"))
       (setenv "NEO4J_HOME" neo4j-home))
-  (cypher-comint host protocol port)
+  (if user
+      (cypher-comint host protocol port user passw)
+     (cypher-comint host protocol port))
   (cypher-interactive-mode)
   (setq cypher-buffer-process (get-buffer-process (current-buffer)))
   (sit-for 1)
@@ -210,6 +212,8 @@ Runs `cypher-shell-hook' before exit."
 	 (plist-get (cdr h) :url))
      (plist-get (cdr p) :proto)
      (plist-get (cdr p) :port)
+     (plist-get (cdr h) :user)
+     (plist-get (cdr h) :passw)
      )))
 
 (defun cypher-param-query-interactive (parm-buf pt)
@@ -283,11 +287,14 @@ Note this won't work for commands that need arguments (currently only
       (comint-accumulate)))
   )
 
-(defun cypher-comint (host proto port)
+(defun cypher-comint (host proto port &optional user passw )
     "Set up comint buffer for cypher-shell.
 HOST url or ip
 PROTO protocol (http https bolt)
-PORT Cypher shell port"
+PORT Cypher shell port
+USER DB user name
+PASSW DB user password"
+    
     (let (( pgm (executable-find cypher-prog))
 	  ( buf-name "Cypher"))
     (unless pgm
@@ -300,8 +307,13 @@ PORT Cypher shell port"
 	  (setq i (1+ i)))))
     (setq cypher-buffer
 	  (pop-to-buffer
-	   (make-comint buf-name pgm "/dev/null" "-a"
-			(concat (format "%s://" proto) host ":" port) )))
+	   (if user
+	       (make-comint buf-name pgm "/dev/null" "-a"
+			    (concat (format "%s://" proto) host ":" port)
+			    "-u" user
+			    "-p" passw)
+	     (make-comint buf-name pgm "/dev/null" "-a"
+			  (concat (format "%s://" proto) host ":" port) ))))
     (add-hook 'comint-preoutput-filter-functions 'cypher-shell-output-filter nil t)
     (add-hook 'comint-dynamic-complete-functions 'cypher-completion-at-point)
     (setq comint-use-prompt-regexp t)
@@ -345,9 +357,9 @@ Pass t for INCLUDE-HDR to retrieve the output header line.
 	       qry tmpb cproc nil t)
 	      (accept-process-output cypher-buffer-process
 				     cypher-do-query-timeout)
-	      (comint-redirect-cleanup)
 	      (setq resp (cypher-shell-output-filter (buffer-string)))
 	      )))
+      (comint-redirect-cleanup)
       (if (string-match cypher-error-status-regexp resp)
 	  (error resp))
       (setq resp (split-string resp "[\n\r]"))
