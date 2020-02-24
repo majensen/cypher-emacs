@@ -201,20 +201,30 @@ Runs `cypher-shell-hook' before exit."
 
 (defun cypher-get-host-interactive ()
   "Interactively choose host and protocol/port."
-  (let* ( (hst (completing-read "Host: " cypher-host-alist))
-	  (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
-	  (h (assoc (intern hst) cypher-host-alist))
-	  (p (assoc (intern prt) cypher-proto-alist))
-	 )
-    (list
-     current-prefix-arg
-     (or (plist-get (cdr h) :address)
-	 (plist-get (cdr h) :url))
-     (plist-get (cdr p) :proto)
-     (plist-get (cdr p) :port)
-     (plist-get (cdr h) :user)
-     (plist-get (cdr h) :passw)
-     )))
+  (let* ( (hst (completing-read "Host: " cypher-host-alist)) )
+    (if (> (length hst) 0)
+        (let* ( (prt (completing-read "Protocol: " cypher-proto-alist nil nil "bolt") )
+                (h (assoc (intern hst) cypher-host-alist))
+                (p (assoc (intern prt) cypher-proto-alist)))
+          (list
+           current-prefix-arg
+           (or (plist-get (cdr h) :address)
+               (plist-get (cdr h) :url))
+           (plist-get (cdr p) :proto)
+           (plist-get (cdr p) :port)
+           (plist-get (cdr h) :user)
+           (plist-get (cdr h) :passw)
+           ))
+      (let* (
+              (h (read-string "URL: " "localhost"))
+              (r (read-string "Proto: " "bolt"))
+              (p (read-string "Port: " "7687"))
+              (u (read-string "User: " "neo4j"))
+              (w (read-passwd "Pass: "))
+              )
+         (list current-prefix-arg
+               h r p u w))
+    )))
 
 (defun cypher-param-query-interactive (parm-buf pt)
   "Interactively run a paramaterized query.
