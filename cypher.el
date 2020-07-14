@@ -18,7 +18,7 @@
 
 ;; Custom variables
 
-(defcustom cypher-mode-dir "/Users/jensenma/Sandbox/cypher-emacs/"
+(defcustom cypher-mode-dir "~/.emacs.d"
   "Where are cypher mode .el files?"
   :type '(file)
   :group 'Cypher)
@@ -379,6 +379,7 @@ Pass t for INCLUDE-HDR to retrieve the output header line.
 (defun cypher-get-db-labels ()
   "Get the set of labels for the db and set `cypher-db-labels'.
 Run in `cypher-shell-hook'"
+  (interactive)
   (condition-case nil
       (setq cypher-db-labels
 	    (mapcar
